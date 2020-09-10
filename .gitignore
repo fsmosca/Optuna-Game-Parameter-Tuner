@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Pycharm
+.idea
+
+# Game
+*.pgn
+
+# Optuna
+*.db
