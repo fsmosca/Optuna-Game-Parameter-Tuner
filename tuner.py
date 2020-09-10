@@ -9,11 +9,11 @@ import optuna
 
 
 class Objective(object):
-    def __init__(self, engine, param, best_param, init_value, variant,
+    def __init__(self, engine, input_param, best_param, init_value, variant,
                  opening_file, old_trial_num, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1, pgnout=None,
                  proto='uci', hashmb=64):
-        self.param = copy.deepcopy(param)
+        self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_result = init_value
         self.init_value = init_value
@@ -39,7 +39,7 @@ class Objective(object):
         self.test_param = {}
 
         if len(self.best_param) == 0:
-            for k, v in param.items():
+            for k, v in input_param.items():
                 self.best_param.update({k: v[0]})
 
         self.trial_num = old_trial_num
@@ -59,8 +59,8 @@ class Objective(object):
 
         # Options for test engine.
         test_options = ''
-        for k, _ in self.param.items():
-            par_val = trial.suggest_int(k, self.param[k][1], self.param[k][2])
+        for k, _ in self.input_param.items():
+            par_val = trial.suggest_int(k, self.input_param[k][1], self.input_param[k][2])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
         test_options.rstrip()
@@ -183,12 +183,12 @@ def main():
 
     # Define the parameters that will be optimized.
     # Format, param name: [default, min, max]
-    param = OrderedDict()
-    param.update({'PawnValueOp': [0, 0, 1000], 'PawnValueEn': [0, 0, 1000]})
-    param.update({'KnightValueOp': [0, 0, 1000], 'KnightValueEn': [0, 0, 1000]})
-    param.update({'BishopValueOp': [0, 0, 1000], 'BishopValueEn': [0, 0, 1000]})
-    param.update({'RookValueOp': [0, 0, 1000], 'RookValueEn': [0, 0, 1000]})
-    param.update({'QueenValueOp': [0, 0, 2000], 'QueenValueEn': [0, 0, 2000]})
+    input_param = OrderedDict()
+    input_param.update({'PawnValueOp': [0, 0, 1000], 'PawnValueEn': [0, 0, 1000]})
+    input_param.update({'KnightValueOp': [0, 0, 1000], 'KnightValueEn': [0, 0, 1000]})
+    input_param.update({'BishopValueOp': [0, 0, 1000], 'BishopValueEn': [0, 0, 1000]})
+    input_param.update({'RookValueOp': [0, 0, 1000], 'RookValueEn': [0, 0, 1000]})
+    input_param.update({'QueenValueOp': [0, 0, 2000], 'QueenValueEn': [0, 0, 2000]})
 
     # Define study.
     study = optuna.create_study(study_name=study_name, direction='maximize',
@@ -199,8 +199,9 @@ def main():
     try:
         init_best_param = copy.deepcopy(study.best_params)
     except ValueError:
-        print('Warning, best param from previous trial is not found!, Use the init param.')
-        init_best_param = Objective.set_param(param)
+        print('Warning, best param from previous trial is not found!, use'
+              ' an init param based from input param.')
+        init_best_param = Objective.set_param(input_param)
         print(f'init param: {init_best_param}')
     except:
         print('Unexpected error:', sys.exc_info()[0])
@@ -223,7 +224,7 @@ def main():
     old_trial_num = len(study.trials)
 
     # Begin param optimization.
-    study.optimize(Objective(args.engine, param,
+    study.optimize(Objective(args.engine, input_param,
                              init_best_param, init_value, variant,
                              opening_file, old_trial_num, base_time_sec,
                              inc_time_sec, rounds, args.concurrency,
