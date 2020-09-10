@@ -11,7 +11,7 @@ import optuna
 class Objective(object):
     def __init__(self, engine, param, best_param, init_value, variant,
                  opening_file, old_trial_num, base_time_sec=5,
-                 inc_time_sec=0.05, rounds=16, worker=1, pgnout=None,
+                 inc_time_sec=0.05, rounds=16, concurrency=1, pgnout=None,
                  proto='uci', hashmb=64):
         self.param = copy.deepcopy(param)
         self.best_param = copy.deepcopy(best_param)
@@ -27,7 +27,7 @@ class Objective(object):
         self.e1 = engine
         self.e2 = engine
 
-        self.concurrency = worker
+        self.concurrency = concurrency
         self.opening_file = opening_file
         self.pgnout = pgnout
 
@@ -138,8 +138,8 @@ def main():
     parser.add_argument('--trials', required=False, type=int,
                         help='Trials to try, default=1000.\n',
                         default=1000)
-    parser.add_argument('--workers', required=False, type=int,
-                        help='Number of threads to run game matches concurrently, default=1.\n',
+    parser.add_argument('--concurrency', required=False, type=int,
+                        help='Number of game matches to run concurrently, default=1.\n',
                         default=1)
     parser.add_argument('--games-per-trial', required=False, type=int,
                         help='Number of games per trial, default=32.\n'
@@ -161,7 +161,6 @@ def main():
     args = parser.parse_args()
 
     trials = args.trials
-    worker = args.workers
 
     num_games = args.games_per_trial
     num_games += 1 if (args.games_per_trial % 2) != 0 else 0
@@ -225,7 +224,8 @@ def main():
     study.optimize(Objective(args.engine, param,
                              init_best_param, init_value, variant,
                              opening_file, old_trial_num, base_time_sec,
-                             inc_time_sec, rounds, worker, pgnout, proto, args.hash),
+                             inc_time_sec, rounds, args.concurrency,
+                             pgnout, proto, args.hash),
                    n_trials=trials)
 
 
