@@ -230,6 +230,12 @@ def main():
                              pgnout, proto, args.hash),
                    n_trials=trials)
 
+    # Show the best param, value and trial number.
+    print()
+    print(f'best param: {study.best_params}')
+    print(f'best value: {study.best_value}')
+    print(f'best trial number: {study.best_trial.number}')
+
 
 if __name__ == "__main__":
     main()
