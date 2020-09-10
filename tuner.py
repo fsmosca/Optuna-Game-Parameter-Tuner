@@ -204,7 +204,7 @@ def main():
         print('Warning, best param from previous trial is not found!, use'
               ' an init param based from input param.')
         init_best_param = Objective.set_param(input_param)
-        print(f'init param: {init_best_param}')
+        print(f'init best param: {init_best_param}')
     except:
         print('Unexpected error:', sys.exc_info()[0])
         raise
@@ -215,13 +215,15 @@ def main():
     try:
         init_value = study.best_value
     except ValueError:
-        print('Warning, init value is not found!')
+        print('Warning, init value is not found!, use init best value 0.5.')
         print(f'init best value: {init_value}')
     except:
         print('Unexpected error:', sys.exc_info()[0])
         raise
     else:
         print(f'best value: {init_value}')
+
+    print()
 
     old_trial_num = len(study.trials)
 
