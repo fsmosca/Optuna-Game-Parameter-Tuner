@@ -36,7 +36,9 @@ optional arguments:
 ```
 
 ## Command line
-`python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./start_opening/ogpt_chess_startpos.epd`
+```python
+python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./start_opening/ogpt_chess_startpos.epd
+```
 
 
 ## Test
