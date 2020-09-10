@@ -178,10 +178,9 @@ def main():
 
     print(f'trials: {trials}, games_per_trial: {rounds * 2}')
 
-    param = OrderedDict()
-
     # Define the parameters that will be optimized.
     # Format, param name: [default, min, max]
+    param = OrderedDict()
     param.update({'PawnValueOp': [0, 0, 1000], 'PawnValueEn': [0, 0, 1000]})
     param.update({'KnightValueOp': [0, 0, 1000], 'KnightValueEn': [0, 0, 1000]})
     param.update({'BishopValueOp': [0, 0, 1000], 'BishopValueEn': [0, 0, 1000]})
