@@ -144,6 +144,9 @@ def main():
     parser.add_argument('--games-per-trial', required=False, type=int,
                         help='Number of games per trial, default=32.\n'
                         'This should be even number.', default=32)
+    parser.add_argument('--study-name', required=False, type=str, default='default_study_name',
+                        help='The name of study. This can be used to resume\n'
+                             'study sessions, default=default_study_name.')
     parser.add_argument('--base-time-sec', required=False, type=int,
                         help='Base time in sec for time control, default=5.',
                         default=5)
@@ -173,7 +176,7 @@ def main():
     pgnout = args.pgn_output
     proto = 'uci'
 
-    study_name = 'piece_value'
+    study_name = args.study_name
     storage_file = f'{study_name}.db'
 
     print(f'trials: {trials}, games_per_trial: {rounds * 2}')
