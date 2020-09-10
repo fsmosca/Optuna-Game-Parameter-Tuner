@@ -190,6 +190,8 @@ def main():
     input_param.update({'RookValueOp': [0, 0, 1000], 'RookValueEn': [0, 0, 1000]})
     input_param.update({'QueenValueOp': [0, 0, 2000], 'QueenValueEn': [0, 0, 2000]})
 
+    print(f'input param: {input_param}\n')
+
     # Define study.
     study = optuna.create_study(study_name=study_name, direction='maximize',
                                 storage=f'sqlite:///{storage_file}',
