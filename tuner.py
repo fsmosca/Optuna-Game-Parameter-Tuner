@@ -136,15 +136,16 @@ def main():
     parser.add_argument('--hash', required=False, type=int,
                         help='Engine memory in MB, default=64.', default=64)
     parser.add_argument('--trials', required=False, type=int,
-                        help='Trials to try, default=1000.\n',
+                        help='Trials to try, default=1000.',
                         default=1000)
     parser.add_argument('--concurrency', required=False, type=int,
-                        help='Number of game matches to run concurrently, default=1.\n',
+                        help='Number of game matches to run concurrently, default=1.',
                         default=1)
     parser.add_argument('--games-per-trial', required=False, type=int,
                         help='Number of games per trial, default=32.\n'
                         'This should be even number.', default=32)
-    parser.add_argument('--study-name', required=False, type=str, default='default_study_name',
+    parser.add_argument('--study-name', required=False, type=str,
+                        default='default_study_name',
                         help='The name of study. This can be used to resume\n'
                              'study sessions, default=default_study_name.')
     parser.add_argument('--base-time-sec', required=False, type=int,
