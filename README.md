@@ -1,11 +1,20 @@
 # Optuna Game Parameter Tuner
-A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants.
+A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants. Engine evaluation parameters that can be optimized are piece values like pawn value or knight value and others. Search parameters that can be optimized are futility pruning margin, null move reduction factors and others. 
 
 ## Setup
 
 * Install python 3.8 or higher
 * Install optuna
   * pip install optuna
+  
+## Basic optimization process outline
+1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
+2. Setup a game match between 2 engines. Test engine and base engine. Test engine will use the parameters suggested by optuna optimizer while base engine will use the initial default parameter values. In the beginning the best parameter is the initial parameters. The test will get the initial parameter values suggestion from the optimimzer.
+3. After a match of say 24 games, the score of test engine will be sent to the optimizer. The score is just (wins+draw/2)/24 from the point of view of the test engine. If the test engine wins (score > 0.5), update the best parameter to the parameter used by test engine. Increment trial by 1.
+4. Check the number of trials done. If trial >= max_trial stop the optimization. This is done by the optimizer.
+5. Get the new parameter values suggested by the optimizer.
+6. Run a new match, the base engine will use the best parameter while the test engine will use the new parameter values suggested by the optimizer.
+7. Goto step 3.
 
 ## Help
 ```python
