@@ -3,9 +3,14 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 ## Setup
 
+#### Required
 * Install python 3.8 or higher
 * Install optuna
   * pip install optuna
+  
+#### Visualization
+* pip install plotly
+* pip install kaleido
   
 ## Basic optimization process outline
 1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
