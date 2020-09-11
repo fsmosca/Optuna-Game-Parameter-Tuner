@@ -11,8 +11,8 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 ```python
 python tuner.py -h
 usage: tuner.py [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY]
-                [--games-per-trial GAMES_PER_TRIAL] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC]
-                --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT]
+                [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
+                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -24,6 +24,9 @@ optional arguments:
   --games-per-trial GAMES_PER_TRIAL
                         Number of games per trial, default=32.
                         This should be even number.
+  --study-name STUDY_NAME
+                        The name of study. This can be used to resume
+                        study sessions, default=default_study_name.
   --base-time-sec BASE_TIME_SEC
                         Base time in sec for time control, default=5.
   --inc-time-sec INC_TIME_SEC
@@ -43,8 +46,7 @@ python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./star
 
 ## Test
 
-#### Chess Piece value optimization
-The piece values from pawn to queen were [optimized](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization) from 0 values.
+* [Chess Piece value optimization 1](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
 
 ## Credits
 * Optuna  
