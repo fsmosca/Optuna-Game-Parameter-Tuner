@@ -46,6 +46,8 @@ class Objective(object):
         self.proto = proto
         self.hashmb = hashmb
 
+        self.inc_factor = 1/64
+
     @staticmethod
     def set_param(from_param):
         new_param = {}
@@ -89,6 +91,8 @@ class Objective(object):
         command += f' -tournament round-robin'
         command += f' -rounds {self.rounds} -games 2 -repeat 2'
         command += f' -openings file={self.opening_file} format=epd'
+        command += f' -resign movecount=6 score=700 twosided=true'
+        command += f' -draw movenumber=30 movecount=6 score=5'
 
         if self.pgnout is not None:
             command += f' -pgnout {self.pgnout}'
@@ -111,7 +115,7 @@ class Objective(object):
 
         # Update best param and value.
         if result > 0.5:
-            inc = (result - 0.5) / 1000
+            inc = self.inc_factor * (result - 0.5)
             self.best_result += inc
             result = self.best_result
 
@@ -184,16 +188,11 @@ def main():
 
     # Define the parameters that will be optimized.
     input_param = OrderedDict()
-    input_param.update({'PawnValueOp': {'default': 0, 'min': 0, 'max': 1000, 'step': 1},
-                        'PawnValueEn': {'default': 0, 'min': 0, 'max': 1000, 'step': 1}})
-    input_param.update({'KnightValueOp': {'default': 0, 'min': 0, 'max': 1000, 'step': 2},
-                        'KnightValueEn': {'default': 0, 'min': 0, 'max': 1000, 'step': 2}})
-    input_param.update({'BishopValueOp': {'default': 0, 'min': 0, 'max': 1000, 'step': 2},
-                        'BishopValueEn': {'default': 0, 'min': 0, 'max': 1000, 'step': 2}})
-    input_param.update({'RookValueOp': {'default': 0, 'min': 0, 'max': 1000, 'step': 4},
-                        'RookValueEn': {'default': 0, 'min': 0, 'max': 1000, 'step': 4}})
-    input_param.update({'QueenValueOp': {'default': 0, 'min': 0, 'max': 2000, 'step': 5},
-                        'QueenValueEn': {'default': 0, 'min': 0, 'max': 2000, 'step': 5}})
+    input_param.update({'PawnValueEn': {'default': 92, 'min': 84, 'max': 120, 'step': 2}})
+    input_param.update({'BishopValueOp': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
+    input_param.update({'BishopValueEn': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
+    input_param.update({'RookValueEn': {'default': 525, 'min': 490, 'max': 550, 'step': 5}})
+    input_param.update({'QueenValueOp': {'default': 985, 'min': 975, 'max': 1050, 'step': 5}})
 
     print(f'input param: {input_param}\n')
 
@@ -245,6 +244,22 @@ def main():
     print(f'best param: {study.best_params}')
     print(f'best value: {study.best_value}')
     print(f'best trial number: {study.best_trial.number}')
+
+    # Create and save plots after this study session is completed.
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.write_image("hist.png")
+
+    fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
+    fig.write_image("slice.png")
+
+    fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
+    fig.write_image("contour.png")
+
+    fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
+    fig.write_image("parallel.png")
+
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.write_image("importance.png")
 
 
 if __name__ == "__main__":
