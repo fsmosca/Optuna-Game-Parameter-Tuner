@@ -13,6 +13,8 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 * pip install plotly
 * pip install sklearn
 * pip install kaleido
+
+Sample [plots](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization-2).
   
 ## Basic optimization process outline
 1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
