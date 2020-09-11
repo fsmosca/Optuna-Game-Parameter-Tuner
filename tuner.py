@@ -50,7 +50,7 @@ class Objective(object):
     def set_param(from_param):
         new_param = {}
         for k, v in from_param.items():
-            new_param.update({k: v[0]})
+            new_param.update({k: v['default']})
 
         return new_param
 
@@ -59,8 +59,8 @@ class Objective(object):
 
         # Options for test engine.
         test_options = ''
-        for k, _ in self.input_param.items():
-            par_val = trial.suggest_int(k, self.input_param[k][1], self.input_param[k][2])
+        for k, v in self.input_param.items():
+            par_val = trial.suggest_int(k, v['min'], v['max'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
         test_options.rstrip()
@@ -182,13 +182,17 @@ def main():
     print(f'trials: {trials}, games_per_trial: {rounds * 2}')
 
     # Define the parameters that will be optimized.
-    # Format, param name: [default, min, max]
     input_param = OrderedDict()
-    input_param.update({'PawnValueOp': [0, 0, 1000], 'PawnValueEn': [0, 0, 1000]})
-    input_param.update({'KnightValueOp': [0, 0, 1000], 'KnightValueEn': [0, 0, 1000]})
-    input_param.update({'BishopValueOp': [0, 0, 1000], 'BishopValueEn': [0, 0, 1000]})
-    input_param.update({'RookValueOp': [0, 0, 1000], 'RookValueEn': [0, 0, 1000]})
-    input_param.update({'QueenValueOp': [0, 0, 2000], 'QueenValueEn': [0, 0, 2000]})
+    input_param.update({'PawnValueOp': {'default': 0, 'min': 0, 'max': 1000},
+                        'PawnValueEn': {'default': 0, 'min': 0, 'max': 1000}})
+    input_param.update({'KnightValueOp': {'default': 0, 'min': 0, 'max': 1000},
+                        'KnightValueEn': {'default': 0, 'min': 0, 'max': 1000}})
+    input_param.update({'BishopValueOp': {'default': 0, 'min': 0, 'max': 1000},
+                        'BishopValueEn': {'default': 0, 'min': 0, 'max': 1000}})
+    input_param.update({'RookValueOp': {'default': 0, 'min': 0, 'max': 1000},
+                        'RookValueEn': {'default': 0, 'min': 0, 'max': 1000}})
+    input_param.update({'QueenValueOp': {'default': 0, 'min': 0, 'max': 2000},
+                        'QueenValueEn': {'default': 0, 'min': 0, 'max': 2000}})
 
     print(f'input param: {input_param}\n')
 
