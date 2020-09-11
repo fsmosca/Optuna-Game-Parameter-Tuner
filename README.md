@@ -5,11 +5,13 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 #### Required
 * Install python 3.8 or higher
+  * Visit https://www.python.org/downloads/
 * Install optuna
   * pip install optuna
   
 #### Visualization
 * pip install plotly
+* pip install sklearn
 * pip install kaleido
   
 ## Basic optimization process outline
