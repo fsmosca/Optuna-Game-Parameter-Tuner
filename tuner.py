@@ -165,6 +165,7 @@ def main():
     parser.add_argument('--pgn-output', required=False, type=str,
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
+    parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
 
     args = parser.parse_args()
 
@@ -246,20 +247,21 @@ def main():
     print(f'best trial number: {study.best_trial.number}')
 
     # Create and save plots after this study session is completed.
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.write_image(f'{study_name}_hist.png')
+    if args.plot:
+        fig = optuna.visualization.plot_optimization_history(study)
+        fig.write_image(f'{study_name}_hist.png')
 
-    fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
-    fig.write_image(f'{study_name}_slice.png')
+        fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
+        fig.write_image(f'{study_name}_slice.png')
 
-    fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
-    fig.write_image(f'{study_name}_contour.png')
+        fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
+        fig.write_image(f'{study_name}_contour.png')
 
-    fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
-    fig.write_image(f'{study_name}_parallel.png')
+        fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
+        fig.write_image(f'{study_name}_parallel.png')
 
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.write_image(f'{study_name}_importance.png')
+        fig = optuna.visualization.plot_param_importances(study)
+        fig.write_image(f'{study_name}_importance.png')
 
 
 if __name__ == "__main__":
