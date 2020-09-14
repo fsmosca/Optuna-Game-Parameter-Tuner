@@ -72,10 +72,22 @@ python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./star
 ```
 
 
-## Test
+## Tests
 
-* [Chess Piece value optimization 1](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
-* [Chess Piece value optimization 2](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization-2)
+* Optimization 1
+  * Link: [Chess Piece value optimization 1](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
+
+* Optimization 2
+  * Trials: 250
+  * Games per Trial: 32
+  * TC: 2s+100ms
+  * Link: [Chess Piece value optimization 2](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization-2)
+  
+* Optimization 3
+  * Trials: 212
+  * Games per trial: 24
+  * TC: 10s+100ms
+  * Link: [Chess Piece value optimization 3](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization-3)
 
 ## Credits
 * Optuna  
