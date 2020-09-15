@@ -248,20 +248,21 @@ def main():
 
     # Create and save plots after this study session is completed.
     if args.plot:
+        pre_name = f'{study_name}_{len(study.trials)}'
         fig = optuna.visualization.plot_optimization_history(study)
-        fig.write_image(f'{study_name}_hist.png')
+        fig.write_image(f'{pre_name}_hist.png')
 
         fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
-        fig.write_image(f'{study_name}_slice.png')
+        fig.write_image(f'{pre_name}_slice.png')
 
         fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
-        fig.write_image(f'{study_name}_contour.png')
+        fig.write_image(f'{pre_name}_contour.png')
 
         fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
-        fig.write_image(f'{study_name}_parallel.png')
+        fig.write_image(f'{pre_name}_parallel.png')
 
         fig = optuna.visualization.plot_param_importances(study)
-        fig.write_image(f'{study_name}_importance.png')
+        fig.write_image(f'{pre_name}_importance.png')
 
 
 if __name__ == "__main__":
