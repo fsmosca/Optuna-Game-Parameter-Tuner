@@ -114,17 +114,18 @@ class Objective(object):
         result = float(result)
 
         # Update best param and value.
-        if result > 0.5:
-            inc = self.inc_factor * (result - 0.5)
+        if result > self.init_value:
+            inc = self.inc_factor * (result - self.init_value)
             self.best_result += inc
             result = self.best_result
 
             for k, v in self.test_param.items():
                 self.best_param.update({k: v})
         else:
-            # If this is the first trial of a new study and it did not get
-            # above 0.5, set the result to init value.
+            # If this is the first trial of a new study, tell the optimizer
+            # that the best value for trial 0 is the initial best value.
             if self.trial_num == 0:
+                print(f'Actual match result for trial {self.trial_num} is {result}. Tell the optimizer that the result is {self.init_value}.')
                 result = self.init_value
 
         self.trial_num += 1
@@ -166,10 +167,14 @@ def main():
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
+    parser.add_argument('--initial-best-value', required=False, type=float,
+                        help='The initial best value for the initial best\n'
+                             'parameter values, default=0.5.', default=0.5)
 
     args = parser.parse_args()
 
     trials = args.trials
+    init_value = args.initial_best_value
 
     num_games = args.games_per_trial
     num_games += 1 if (args.games_per_trial % 2) != 0 else 0
@@ -216,11 +221,10 @@ def main():
     else:
         print(f'best param: {init_best_param}')
 
-    init_value = 0.5
     try:
         init_value = study.best_value
     except ValueError:
-        print('Warning, init value is not found!, use init best value 0.5.')
+        print(f'Warning, init value is not found!, use an init best value {init_value}.')
         print(f'init best value: {init_value}')
     except:
         print('Unexpected error:', sys.exc_info()[0])
