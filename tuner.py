@@ -256,6 +256,8 @@ def main():
         fig.write_image(f'{pre_name}_slice.png')
 
         fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
+        if len(input_param) >= 3:
+            fig.update_layout(width=1000, height=1000)
         fig.write_image(f'{pre_name}_contour.png')
 
         fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
