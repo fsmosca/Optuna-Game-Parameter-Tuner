@@ -248,7 +248,7 @@ def main():
 
     # Create and save plots after this study session is completed.
     if args.plot:
-        pre_name = f'{study_name}_{len(study.trials)}'
+        pre_name = f'./visuals/{study_name}_{len(study.trials)}'
         fig = optuna.visualization.plot_optimization_history(study)
         fig.write_image(f'{pre_name}_hist.png')
 
