@@ -34,13 +34,15 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 6. Run a new match, the base engine will use the best parameter while the test engine will use the new parameter values suggested by the optimizer.
 7. Goto step 3.
 8. When max_trial is reached, optimization is stopped and png plots will be saved.
+9. You can extend the trials or optimization by running the study again using the same study_name.
 
 ## Help
 ```python
-python tuner.py -h
+python -u tuner.py -h
 usage: tuner.py [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY]
                 [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT]
+                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT]
+                [--pgn-output PGN_OUTPUT] [--plot]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -64,6 +66,7 @@ optional arguments:
   --variant VARIANT     Game variant, default=normal.
   --pgn-output PGN_OUTPUT
                         Output pgn filename, default=optuna_games.pgn.
+  --plot                A flag to output plots in png.
 ```
 
 ## Command line
