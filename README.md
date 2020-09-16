@@ -41,8 +41,8 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 python -u tuner.py -h
 usage: tuner.py [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY]
                 [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT]
-                [--pgn-output PGN_OUTPUT] [--plot]
+                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT]
+                [--plot] [--initial-best-value INITIAL_BEST_VALUE]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -67,6 +67,9 @@ optional arguments:
   --pgn-output PGN_OUTPUT
                         Output pgn filename, default=optuna_games.pgn.
   --plot                A flag to output plots in png.
+  --initial-best-value INITIAL_BEST_VALUE
+                        The initial best value for the initial best
+                        parameter values, default=0.5.
 ```
 
 ## Command line
@@ -81,7 +84,12 @@ python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./star
   * Trials: 212
   * Games per trial: 24
   * TC: 10s+100ms
-  * Link: [Chess Piece value optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
+  * Link: [Chess Piece Value Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
+* Optimization 2
+  * Trials: 200
+  * Games per trial: 24
+  * TC: 20s+100ms
+  * link: [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
 
 ## Credits
 * Optuna  
