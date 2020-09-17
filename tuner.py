@@ -133,6 +133,31 @@ class Objective(object):
         return result
 
 
+def save_plots(study, study_name, input_param, is_plot=False):
+    if not is_plot:
+        return
+
+    trials = len(study.trials)
+    pre_name = f'./visuals/{study_name}_{trials}'
+
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.write_image(f'{pre_name}_hist.png')
+
+    fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
+    fig.write_image(f'{pre_name}_slice.png')
+
+    fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
+    if len(input_param) >= 3:
+        fig.update_layout(width=1000, height=1000)
+    fig.write_image(f'{pre_name}_contour.png')
+
+    fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
+    fig.write_image(f'{pre_name}_parallel.png')
+
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.write_image(f'{pre_name}_importance.png')
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter)
@@ -252,24 +277,7 @@ def main():
     print(f'best trial number: {study.best_trial.number}')
 
     # Create and save plots after this study session is completed.
-    if args.plot:
-        pre_name = f'./visuals/{study_name}_{len(study.trials)}'
-        fig = optuna.visualization.plot_optimization_history(study)
-        fig.write_image(f'{pre_name}_hist.png')
-
-        fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
-        fig.write_image(f'{pre_name}_slice.png')
-
-        fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
-        if len(input_param) >= 3:
-            fig.update_layout(width=1000, height=1000)
-        fig.write_image(f'{pre_name}_contour.png')
-
-        fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
-        fig.write_image(f'{pre_name}_parallel.png')
-
-        fig = optuna.visualization.plot_param_importances(study)
-        fig.write_image(f'{pre_name}_importance.png')
+    save_plots(study, study_name, input_param, args.plot)
 
 
 if __name__ == "__main__":
