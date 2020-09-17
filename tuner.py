@@ -176,6 +176,7 @@ def main():
     trials = args.trials
     init_value = args.initial_best_value
 
+    # Number of games should be even for a fair engine match.
     num_games = args.games_per_trial
     num_games += 1 if (args.games_per_trial % 2) != 0 else 0
     rounds = num_games//2
