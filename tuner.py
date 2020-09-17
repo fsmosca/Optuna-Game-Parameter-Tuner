@@ -137,7 +137,12 @@ def save_plots(study, study_name, input_param, is_plot=False):
     if not is_plot:
         return
 
+    print('Saving plots ...')
+
     trials = len(study.trials)
+
+    # Make sure there is a visuals folder in the current working folder.
+    # Todo: Make an option with default value visuals
     pre_name = f'./visuals/{study_name}_{trials}'
 
     fig = optuna.visualization.plot_optimization_history(study)
@@ -156,6 +161,8 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     fig = optuna.visualization.plot_param_importances(study)
     fig.write_image(f'{pre_name}_importance.png')
+
+    print('Done saving plots.')
 
 
 def main():
@@ -270,14 +277,14 @@ def main():
                              pgnout, proto, args.hash),
                    n_trials=trials)
 
+    # Create and save plots after this study session is completed.
+    save_plots(study, study_name, input_param, args.plot)
+
     # Show the best param, value and trial number.
     print()
     print(f'best param: {study.best_params}')
     print(f'best value: {study.best_value}')
     print(f'best trial number: {study.best_trial.number}')
-
-    # Create and save plots after this study session is completed.
-    save_plots(study, study_name, input_param, args.plot)
 
 
 if __name__ == "__main__":
