@@ -194,7 +194,7 @@ def main():
 
     # Define the parameters that will be optimized.
     input_param = OrderedDict()
-    input_param.update({'PawnValueEn': {'default': 92, 'min': 84, 'max': 120, 'step': 2}})
+    input_param.update({'PawnValueEn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}})
     input_param.update({'BishopValueOp': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
     input_param.update({'BishopValueEn': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
     input_param.update({'RookValueEn': {'default': 525, 'min': 490, 'max': 550, 'step': 5}})
