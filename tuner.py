@@ -57,6 +57,7 @@ class Objective(object):
         return new_param
 
     def __call__(self, trial):
+        print()
         print(f'starting trial: {self.trial_num} ...')
 
         # Options for test engine.
@@ -112,6 +113,7 @@ class Objective(object):
             raise Exception('The match did not terminate properly!')
 
         result = float(result)
+        print(f'Actual match result: {result}')
 
         # Update best param and value.
         if result > self.init_value:
@@ -121,12 +123,6 @@ class Objective(object):
 
             for k, v in self.test_param.items():
                 self.best_param.update({k: v})
-        else:
-            # If this is the first trial of a new study, tell the optimizer
-            # that the best value for trial 0 is the initial best value.
-            if self.trial_num == 0:
-                print(f'Actual match result for trial {self.trial_num} is {result}. Tell the optimizer that the result is {self.init_value}.')
-                result = self.init_value
 
         self.trial_num += 1
 
@@ -257,15 +253,14 @@ def main():
     try:
         init_value = study.best_value
     except ValueError:
-        print(f'Warning, init value is not found!, use an init best value {init_value}.')
+        print(f'Warning, best value from previous trial is not found!, use'
+              ' an init value from input value.')
         print(f'init best value: {init_value}')
     except:
         print('Unexpected error:', sys.exc_info()[0])
         raise
     else:
         print(f'best value: {init_value}')
-
-    print()
 
     old_trial_num = len(study.trials)
 
