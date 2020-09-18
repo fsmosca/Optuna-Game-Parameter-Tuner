@@ -7,6 +7,13 @@ from pathlib import Path
 
 import optuna
 
+is_panda_ok = True
+try:
+    import pandas
+except ModuleNotFoundError:
+    is_panda_ok = False
+    print('Warning! pandas is not installed.')
+
 
 class Objective(object):
     def __init__(self, engine, input_param, best_param, init_value, variant,
@@ -305,6 +312,12 @@ def main():
 
         # Create and save plots after this study session is completed.
         save_plots(study, study_name, input_param, args.plot)
+
+        # Build pandas dataframe, print and save to csv file.
+        if is_panda_ok:
+            df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+            print(df.to_string(index=False))
+            df.to_csv(f'{study_name}.csv', index=False)
 
         # Show the best param, value and trial number.
         print()
