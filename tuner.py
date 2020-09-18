@@ -96,9 +96,7 @@ class Objective(object):
         command += f' -openings file={self.opening_file} format=epd'
         command += f' -resign movecount=6 score=700 twosided=true'
         command += f' -draw movenumber=30 movecount=6 score=5'
-
-        if self.pgnout is not None:
-            command += f' -pgnout {self.pgnout}'
+        command += f' -pgnout {self.pgnout}'
 
         # Execute the command line to start the match.
         process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
