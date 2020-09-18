@@ -74,6 +74,7 @@ class Objective(object):
             base_options += f'option.{k}={v} '
         base_options.rstrip()
 
+        # Log info to console.
         print(f'suggested param: {self.test_param}')
         if self.trial_num > 0:
             print(f'best param: {self.best_param}')
@@ -82,6 +83,7 @@ class Objective(object):
             print(f'init param: {self.best_param}')
             print(f'init value: {self.best_result}')
 
+        # Create command line for the engine match using cutechess-cli.
         tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
         command = f' -concurrency {self.concurrency}'
         command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
@@ -98,6 +100,7 @@ class Objective(object):
         if self.pgnout is not None:
             command += f' -pgnout {self.pgnout}'
 
+        # Execute the command line to start the match.
         process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
         output = process.communicate()[0]
         if process.returncode != 0:
