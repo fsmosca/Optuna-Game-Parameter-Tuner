@@ -27,6 +27,10 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 #### Save studies to pandas dataframe and csv file
 * pip install pandas
+
+#### Install all dependencies
+Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
+* pip install -r requirements.txt
   
 ## Basic optimization process outline
 1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
