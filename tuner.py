@@ -198,11 +198,15 @@ def main():
     parser.add_argument('--initial-best-value', required=False, type=float,
                         help='The initial best value for the initial best\n'
                              'parameter values, default=0.50005.', default=0.50005)
+    parser.add_argument('--save-plots-every-trial', required=False, type=int,
+                        help='Save plots every n trials, default=10.',
+                        default=10)
 
     args = parser.parse_args()
 
     trials = args.trials
     init_value = args.initial_best_value
+    save_plots_every_trial = args.save_plots_every_trial
 
     # Number of games should be even for a fair engine match.
     num_games = args.games_per_trial
@@ -232,9 +236,8 @@ def main():
 
     print(f'input param: {input_param}\n')
 
-    save_image_every_trial = 5
-    max_cycle = trials // save_image_every_trial
-    trials = save_image_every_trial
+    max_cycle = trials // save_plots_every_trial
+    trials = save_plots_every_trial
     cycle = 0
 
     while cycle < max_cycle:
