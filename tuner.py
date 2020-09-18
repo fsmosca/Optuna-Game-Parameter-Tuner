@@ -116,8 +116,8 @@ class Objective(object):
         print(f'Actual match result: {result}')
 
         # Update best param and value.
-        if result > self.init_value:
-            inc = self.inc_factor * (result - self.init_value)
+        if result >= self.init_value:
+            inc = self.inc_factor * (result - self.init_value + 0.001)
             self.best_result += inc
             result = self.best_result
 
@@ -197,7 +197,7 @@ def main():
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
     parser.add_argument('--initial-best-value', required=False, type=float,
                         help='The initial best value for the initial best\n'
-                             'parameter values, default=0.5.', default=0.5)
+                             'parameter values, default=0.50005.', default=0.50005)
 
     args = parser.parse_args()
 
@@ -228,58 +228,79 @@ def main():
     input_param.update({'BishopValueEn': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
     input_param.update({'RookValueEn': {'default': 525, 'min': 490, 'max': 550, 'step': 5}})
     input_param.update({'QueenValueOp': {'default': 985, 'min': 975, 'max': 1050, 'step': 5}})
+    input_param.update({'MobilityWeight': {'default': 100, 'min': 50, 'max': 150, 'step': 4}})
 
     print(f'input param: {input_param}\n')
 
-    # Define study.
-    study = optuna.create_study(study_name=study_name, direction='maximize',
-                                storage=f'sqlite:///{storage_file}',
-                                load_if_exists=True)
+    save_image_every_trial = 5
+    max_cycle = trials // save_image_every_trial
+    trials = save_image_every_trial
+    cycle = 0
 
-    # Resume if there is existing data.
-    try:
-        init_best_param = copy.deepcopy(study.best_params)
-    except ValueError:
-        print('Warning, best param from previous trial is not found!, use'
-              ' an init param based from input param.')
-        init_best_param = Objective.set_param(input_param)
-        print(f'init best param: {init_best_param}')
-    except:
-        print('Unexpected error:', sys.exc_info()[0])
-        raise
-    else:
-        print(f'best param: {init_best_param}')
+    while cycle < max_cycle:
+        cycle += 1
 
-    try:
-        init_value = study.best_value
-    except ValueError:
-        print(f'Warning, best value from previous trial is not found!, use'
-              ' an init value from input value.')
-        print(f'init best value: {init_value}')
-    except:
-        print('Unexpected error:', sys.exc_info()[0])
-        raise
-    else:
-        print(f'best value: {init_value}')
+        # Define study.
+        study = optuna.create_study(study_name=study_name, direction='maximize',
+                                    storage=f'sqlite:///{storage_file}',
+                                    load_if_exists=True)
 
-    old_trial_num = len(study.trials)
+        # Get the best value from previous study session.
+        is_init_value_high = False
+        try:
+            study_init_value = study.best_value
+        except ValueError:
+            print(f'Warning, best value from previous trial is not found!, use'
+                  ' an init value from input value.')
+            print(f'init best value: {init_value}')
+        except:
+            print('Unexpected error:', sys.exc_info()[0])
+            raise
+        else:
+            if study_init_value > init_value:
+                print(f'best value: {study_init_value}')
+                init_value = study_init_value
+            else:
+                is_init_value_high = True
+                print(f'init best value: {init_value}')
 
-    # Begin param optimization.
-    study.optimize(Objective(args.engine, input_param,
-                             init_best_param, init_value, variant,
-                             opening_file, old_trial_num, base_time_sec,
-                             inc_time_sec, rounds, args.concurrency,
-                             pgnout, proto, args.hash),
-                   n_trials=trials)
+        # Get the best param values from previous study session.
+        try:
+            study_best_param = copy.deepcopy(study.best_params)
+        except ValueError:
+            print('Warning, best param from previous trial is not found!, use'
+                  ' an init param based from input param.')
+            init_best_param = Objective.set_param(input_param)
+            print(f'init best param: {init_best_param}')
+        except:
+            print('Unexpected error:', sys.exc_info()[0])
+            raise
+        else:
+            if is_init_value_high:
+                init_best_param = Objective.set_param(input_param)
+                print(f'init best param: {init_best_param}')
+            else:
+                init_best_param = copy.deepcopy(study_best_param)
+                print(f'best param: {init_best_param}')
 
-    # Create and save plots after this study session is completed.
-    save_plots(study, study_name, input_param, args.plot)
+        old_trial_num = len(study.trials)
 
-    # Show the best param, value and trial number.
-    print()
-    print(f'best param: {study.best_params}')
-    print(f'best value: {study.best_value}')
-    print(f'best trial number: {study.best_trial.number}')
+        # Begin param optimization.
+        study.optimize(Objective(args.engine, input_param,
+                                 init_best_param, init_value, variant,
+                                 opening_file, old_trial_num, base_time_sec,
+                                 inc_time_sec, rounds, args.concurrency,
+                                 pgnout, proto, args.hash),
+                       n_trials=trials)
+
+        # Create and save plots after this study session is completed.
+        save_plots(study, study_name, input_param, args.plot)
+
+        # Show the best param, value and trial number.
+        print()
+        print(f'best param: {study.best_params}')
+        print(f'best value: {study.best_value}')
+        print(f'best trial number: {study.best_trial.number}')
 
 
 if __name__ == "__main__":
