@@ -236,8 +236,14 @@ def main():
 
     print(f'input param: {input_param}\n')
 
+    # Adjust save_plots_every_trial if trials is lower than it so
+    # that max_cycle is 1 or more and studies can continue. The plot
+    # will be generated after the study.
+    if trials < save_plots_every_trial:
+        save_plots_every_trial = trials
+
     max_cycle = trials // save_plots_every_trial
-    trials = save_plots_every_trial
+    n_trials = save_plots_every_trial
     cycle = 0
 
     while cycle < max_cycle:
@@ -294,7 +300,7 @@ def main():
                                  opening_file, old_trial_num, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  pgnout, proto, args.hash),
-                       n_trials=trials)
+                       n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
         save_plots(study, study_name, input_param, args.plot)
