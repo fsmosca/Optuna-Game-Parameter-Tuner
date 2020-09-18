@@ -24,6 +24,9 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 * pip install plotly
 * pip install sklearn
 * pip install kaleido
+
+#### Save studies to pandas dataframe and csv file
+* pip install pandas
   
 ## Basic optimization process outline
 1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
@@ -94,6 +97,8 @@ python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./star
 ## Credits
 * Optuna  
 https://github.com/optuna/optuna
+* Cutechess  
+https://github.com/cutechess/cutechess
 * Plotly  
 https://plotly.com/
 * Sklearn  
