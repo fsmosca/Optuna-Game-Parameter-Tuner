@@ -121,7 +121,7 @@ class Objective(object):
             raise Exception('The match did not terminate properly!')
 
         result = float(result)
-        print(f'Actual match result: {result}')
+        print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
         # Update best param and value.
         if result >= self.init_value:
