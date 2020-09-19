@@ -265,7 +265,7 @@ def main():
         # Get the best value from previous study session.
         is_init_value_high, updated_init_value = False, init_best_value
         try:
-            study_init_value = study.best_value
+            study_best_value = study.best_value
         except ValueError:
             print(f'Warning, best value from previous trial is not found!, use'
                   ' an init value from input value.')
@@ -274,9 +274,9 @@ def main():
             print('Unexpected error:', sys.exc_info()[0])
             raise
         else:
-            if study_init_value > init_best_value:
-                print(f'best value: {study_init_value}')
-                updated_init_value = study_init_value
+            if study_best_value > init_best_value:
+                print(f'best value: {study_best_value}')
+                updated_init_value = study_best_value
             else:
                 is_init_value_high = True
                 print(f'init best value: {init_best_value}')
