@@ -16,13 +16,13 @@ except ModuleNotFoundError:
 
 
 class Objective(object):
-    def __init__(self, engine, input_param, best_param, init_value, variant,
-                 opening_file, old_trial_num, base_time_sec=5,
-                 inc_time_sec=0.05, rounds=16, concurrency=1, pgnout=None,
-                 proto='uci', hashmb=64):
+    def __init__(self, engine, input_param, best_param, best_result,
+                 init_value, variant, opening_file, old_trial_num,
+                 base_time_sec=5, inc_time_sec=0.05, rounds=16,
+                 concurrency=1, pgnout=None, proto='uci', hashmb=64):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
-        self.best_result = init_value
+        self.best_result = best_result
         self.init_value = init_value
         self.rounds = rounds
 
@@ -304,8 +304,9 @@ def main():
 
         # Begin param optimization.
         study.optimize(Objective(args.engine, input_param,
-                                 init_best_param, updated_init_value, variant,
-                                 opening_file, old_trial_num, base_time_sec,
+                                 init_best_param, updated_init_value,
+                                 init_best_value, variant, opening_file,
+                                 old_trial_num, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  pgnout, proto, args.hash),
                        n_trials=n_trials)
