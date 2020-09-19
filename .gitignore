@@ -136,3 +136,7 @@ dmypy.json
 
 # Optuna
 *.db
+
+# Repo
+*.png
+*.csv
