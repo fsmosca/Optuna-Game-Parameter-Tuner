@@ -213,7 +213,7 @@ def main():
     args = parser.parse_args()
 
     trials = args.trials
-    init_value = args.initial_best_value
+    init_best_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
 
     # Number of games should be even for a fair engine match.
@@ -263,23 +263,23 @@ def main():
                                     load_if_exists=True)
 
         # Get the best value from previous study session.
-        is_init_value_high, updated_init_value = False, init_value
+        is_init_value_high, updated_init_value = False, init_best_value
         try:
             study_init_value = study.best_value
         except ValueError:
             print(f'Warning, best value from previous trial is not found!, use'
                   ' an init value from input value.')
-            print(f'init best value: {init_value}')
+            print(f'init best value: {init_best_value}')
         except:
             print('Unexpected error:', sys.exc_info()[0])
             raise
         else:
-            if study_init_value > init_value:
+            if study_init_value > init_best_value:
                 print(f'best value: {study_init_value}')
                 updated_init_value = study_init_value
             else:
                 is_init_value_high = True
-                print(f'init best value: {init_value}')
+                print(f'init best value: {init_best_value}')
 
         # Get the best param values from previous study session.
         try:
