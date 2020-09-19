@@ -127,7 +127,9 @@ class Objective(object):
         result = float(result)
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
-        # Update best param and value.
+        # Update best param and value. We modify the result here because the
+        # optimizer will consider the max result in its algorithm.
+        # Ref.: https://github.com/optuna/optuna/issues/1728
         if result >= self.init_value:
             inc = self.inc_factor * (result - self.init_value + 0.001)
             self.best_result += inc
