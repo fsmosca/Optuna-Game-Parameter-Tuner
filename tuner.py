@@ -263,7 +263,7 @@ def main():
                                     load_if_exists=True)
 
         # Get the best value from previous study session.
-        is_init_value_high = False
+        is_init_value_high, updated_init_value = False, init_value
         try:
             study_init_value = study.best_value
         except ValueError:
@@ -276,7 +276,7 @@ def main():
         else:
             if study_init_value > init_value:
                 print(f'best value: {study_init_value}')
-                init_value = study_init_value
+                updated_init_value = study_init_value
             else:
                 is_init_value_high = True
                 print(f'init best value: {init_value}')
@@ -304,7 +304,7 @@ def main():
 
         # Begin param optimization.
         study.optimize(Objective(args.engine, input_param,
-                                 init_best_param, init_value, variant,
+                                 init_best_param, updated_init_value, variant,
                                  opening_file, old_trial_num, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  pgnout, proto, args.hash),
