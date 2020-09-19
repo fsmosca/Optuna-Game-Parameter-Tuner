@@ -15,6 +15,10 @@ except ModuleNotFoundError:
     print('Warning! pandas is not installed.')
 
 
+APP_NAME = 'Optuna Game Parameter Tuner'
+APP_VERSION = 'v0.1.0'
+
+
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_result,
                  init_value, variant, opening_file, old_trial_num,
@@ -171,7 +175,10 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        prog='%s %s' % (APP_NAME, APP_VERSION),
+        description='Optimize parameter values of a game agent using optuna framework.',
+        epilog='%(prog)s')
     parser.add_argument('--engine', required=True,
                         help='Engine filename or engine path and filename.')
     parser.add_argument('--hash', required=False, type=int,
