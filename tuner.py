@@ -16,17 +16,18 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.1.0'
+APP_VERSION = 'v0.2.0'
 
 
 class Objective(object):
-    def __init__(self, engine, input_param, best_param, best_result,
-                 init_value, variant, opening_file, old_trial_num,
+    def __init__(self, engine, input_param, best_param, best_value,
+                 init_param, init_value, variant, opening_file, old_trial_num,
                  base_time_sec=5, inc_time_sec=0.05, rounds=16,
                  concurrency=1, pgnout=None, proto='uci', hashmb=64):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
-        self.best_result = best_result
+        self.best_value = best_value
+        self.init_param = copy.deepcopy(init_param)
         self.init_value = init_value
         self.rounds = rounds
 
@@ -48,10 +49,6 @@ class Objective(object):
         self.old_trial_num = old_trial_num
 
         self.test_param = {}
-
-        if len(self.best_param) == 0:
-            for k, v in input_param.items():
-                self.best_param.update({k: v[0]})
 
         self.trial_num = old_trial_num
         self.proto = proto
@@ -81,18 +78,25 @@ class Objective(object):
 
         # Options for base engine.
         base_options = ''
-        for k, v in self.best_param.items():
-            base_options += f'option.{k}={v} '
+        if self.best_value > self.init_value:
+            for k, v in self.best_param.items():
+                base_options += f'option.{k}={v} '
+        else:
+            for k, v in self.init_param.items():
+                base_options += f'option.{k}={v} '
         base_options.rstrip()
 
         # Log info to console.
-        print(f'suggested param: {self.test_param}')
-        if self.trial_num > 0:
-            print(f'best param: {self.best_param}')
-            print(f'best value: {self.best_result}')
+        print(f'suggested param for test engine: {self.test_param}')
+        if self.best_value > self.init_value:
+            print(f'param for base engine          : {self.best_param}')
         else:
-            print(f'init param: {self.best_param}')
-            print(f'init value: {self.best_result}')
+            print(f'param for base engine          : {self.init_param}')
+
+        print(f'init param: {self.init_param}')
+        print(f'init value: {self.init_value}')
+        print(f'study best param: {self.best_param}')
+        print(f'study best value: {self.best_value}')
 
         # Create command line for the engine match using cutechess-cli.
         tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
@@ -102,11 +106,11 @@ class Objective(object):
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
         command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
-        command += f' -tournament round-robin'
+        command += ' -tournament round-robin'
         command += f' -rounds {self.rounds} -games 2 -repeat 2'
         command += f' -openings file={self.opening_file} format=epd'
-        command += f' -resign movecount=6 score=700 twosided=true'
-        command += f' -draw movenumber=30 movecount=6 score=5'
+        command += ' -resign movecount=6 score=700 twosided=true'
+        command += ' -draw movenumber=30 movecount=6 score=5'
         command += f' -pgnout {self.pgnout}'
 
         # Execute the command line to start the match.
@@ -130,13 +134,21 @@ class Objective(object):
         # Update best param and value. We modify the result here because the
         # optimizer will consider the max result in its algorithm.
         # Ref.: https://github.com/optuna/optuna/issues/1728
-        if result >= self.init_value:
-            inc = self.inc_factor * (result - self.init_value + 0.001)
-            self.best_result += inc
-            result = self.best_result
+        if result > self.init_value:
+            if self.best_value < self.init_value:
+                self.best_value = self.init_value
+            inc = self.inc_factor * (result - self.init_value)
+            self.best_value += inc
+            result = self.best_value
 
             for k, v in self.test_param.items():
                 self.best_param.update({k: v})
+        else:
+            if result > self.best_value:
+                self.best_value = result
+
+                for k, v in self.test_param.items():
+                    self.best_param.update({k: v})
 
         self.trial_num += 1
 
@@ -214,7 +226,7 @@ def main():
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
     parser.add_argument('--initial-best-value', required=False, type=float,
                         help='The initial best value for the initial best\n'
-                             'parameter values, default=0.50005.', default=0.50005)
+                             'parameter values, default=0.5.', default=0.5)
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
@@ -222,7 +234,7 @@ def main():
     args = parser.parse_args()
 
     trials = args.trials
-    init_best_value = args.initial_best_value
+    init_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
 
     # Number of games should be even for a fair engine match.
@@ -252,6 +264,7 @@ def main():
     input_param.update({'MobilityWeight': {'default': 100, 'min': 50, 'max': 150, 'step': 4}})
 
     print(f'input param: {input_param}\n')
+    init_param = Objective.set_param(input_param)
 
     # Adjust save_plots_every_trial if trials is lower than it so
     # that max_cycle is 1 or more and studies can continue. The plot
@@ -272,49 +285,32 @@ def main():
                                     load_if_exists=True)
 
         # Get the best value from previous study session.
-        is_init_value_high, updated_init_value = False, init_best_value
+        best_param, best_value = {}, 0.0
         try:
-            study_best_value = study.best_value
+            best_value = study.best_value
         except ValueError:
-            print(f'Warning, best value from previous trial is not found!, use'
-                  ' an init value from input value.')
-            print(f'init best value: {init_best_value}')
+            print('Warning, best value from previous trial is not found!')
         except:
             print('Unexpected error:', sys.exc_info()[0])
             raise
-        else:
-            if study_best_value > init_best_value:
-                print(f'best value: {study_best_value}')
-                updated_init_value = study_best_value
-            else:
-                is_init_value_high = True
-                print(f'init best value: {init_best_value}')
+        print(f'study best value: {best_value}')
 
         # Get the best param values from previous study session.
         try:
-            study_best_param = copy.deepcopy(study.best_params)
+            best_param = copy.deepcopy(study.best_params)
         except ValueError:
-            print('Warning, best param from previous trial is not found!, use'
-                  ' an init param based from input param.')
-            init_best_param = Objective.set_param(input_param)
-            print(f'init best param: {init_best_param}')
+            print('Warning, best param from previous trial is not found!.')
         except:
             print('Unexpected error:', sys.exc_info()[0])
             raise
-        else:
-            if is_init_value_high:
-                init_best_param = Objective.set_param(input_param)
-                print(f'init best param: {init_best_param}')
-            else:
-                init_best_param = copy.deepcopy(study_best_param)
-                print(f'best param: {init_best_param}')
+        print(f'study best param: {best_param}')
 
         old_trial_num = len(study.trials)
 
         # Begin param optimization.
         study.optimize(Objective(args.engine, input_param,
-                                 init_best_param, updated_init_value,
-                                 init_best_value, variant, opening_file,
+                                 best_param, best_value, init_param,
+                                 init_value, variant, opening_file,
                                  old_trial_num, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  pgnout, proto, args.hash),
