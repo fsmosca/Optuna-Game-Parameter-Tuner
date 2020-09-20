@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.2.2'
+APP_VERSION = 'v0.2.3'
 
 
 class Objective(object):
@@ -55,6 +55,7 @@ class Objective(object):
         self.proto = proto
         self.hashmb = hashmb
 
+        # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
 
     @staticmethod
@@ -145,6 +146,7 @@ class Objective(object):
             for k, v in self.test_param.items():
                 self.best_param.update({k: v})
         else:
+            # Backup study best value and param.
             if result > self.best_value:
                 self.best_value = result
 
