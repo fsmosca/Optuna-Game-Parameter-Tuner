@@ -46,10 +46,11 @@ Instead of installing each module like optuna, plotly and others. Just install w
 ## Help
 ```python
 python -u tuner.py -h
-usage: tuner.py [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY]
-                [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT]
-                [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+usage: Optuna Game Parameter Tuner v0.3.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
+                                          [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param]
+
+Optimize parameter values of a game agent using optuna framework.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -77,6 +78,12 @@ optional arguments:
   --initial-best-value INITIAL_BEST_VALUE
                         The initial best value for the initial best
                         parameter values, default=0.5.
+  --save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL
+                        Save plots every n trials, default=10.
+  --fix-base-param      A flag to fix the parameter of base engine.
+                        It will use the init or default parameter values.
+
+Optuna Game Parameter Tuner v0.3.0
 ```
 
 ## Command line
