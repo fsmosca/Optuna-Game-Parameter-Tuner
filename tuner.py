@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.2.1'
+APP_VERSION = 'v0.2.2'
 
 
 class Objective(object):
@@ -328,9 +328,9 @@ def main():
 
         # Show the best param, value and trial number.
         print()
-        print(f'best param: {study.best_params}')
-        print(f'best value: {study.best_value}')
-        print(f'best trial number: {study.best_trial.number}')
+        print(f'study best param: {study.best_params}')
+        print(f'study best value: {study.best_value}')
+        print(f'study best trial number: {study.best_trial.number}')
 
 
 if __name__ == "__main__":
