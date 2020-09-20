@@ -16,14 +16,15 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.2.0'
+APP_VERSION = 'v0.2.1'
 
 
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_value,
-                 init_param, init_value, variant, opening_file, old_trial_num,
-                 base_time_sec=5, inc_time_sec=0.05, rounds=16,
-                 concurrency=1, pgnout=None, proto='uci', hashmb=64):
+                 init_param, init_value, variant, opening_file,
+                 old_trial_num, pgnout, base_time_sec=5,
+                 inc_time_sec=0.05, rounds=16, concurrency=1,
+                 proto='uci', hashmb=64):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -311,9 +312,9 @@ def main():
         study.optimize(Objective(args.engine, input_param,
                                  best_param, best_value, init_param,
                                  init_value, variant, opening_file,
-                                 old_trial_num, base_time_sec,
+                                 old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
-                                 pgnout, proto, args.hash),
+                                 proto, args.hash),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
