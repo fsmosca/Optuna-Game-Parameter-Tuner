@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.2.3'
+APP_VERSION = 'v0.3.0'
 
 
 class Objective(object):
@@ -24,7 +24,7 @@ class Objective(object):
                  init_param, init_value, variant, opening_file,
                  old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
-                 proto='uci', hashmb=64):
+                 proto='uci', hashmb=64, fix_base_param=False):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -57,6 +57,7 @@ class Objective(object):
 
         # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
+        self.fix_base_param = fix_base_param
 
     @staticmethod
     def set_param(from_param):
@@ -80,20 +81,27 @@ class Objective(object):
 
         # Options for base engine.
         base_options = ''
-        if self.best_value > self.init_value:
-            for k, v in self.best_param.items():
-                base_options += f'option.{k}={v} '
-        else:
+        if self.fix_base_param:
             for k, v in self.init_param.items():
                 base_options += f'option.{k}={v} '
+        else:
+            if self.best_value > self.init_value:
+                for k, v in self.best_param.items():
+                    base_options += f'option.{k}={v} '
+            else:
+                for k, v in self.init_param.items():
+                    base_options += f'option.{k}={v} '
         base_options.rstrip()
 
         # Log info to console.
         print(f'suggested param for test engine: {self.test_param}')
-        if self.best_value > self.init_value:
-            print(f'param for base engine          : {self.best_param}')
-        else:
+        if self.fix_base_param:
             print(f'param for base engine          : {self.init_param}')
+        else:
+            if self.best_value > self.init_value:
+                print(f'param for base engine          : {self.best_param}')
+            else:
+                print(f'param for base engine          : {self.init_param}')
 
         print(f'init param: {self.init_param}')
         print(f'init value: {self.init_value}')
@@ -133,25 +141,33 @@ class Objective(object):
         result = float(result)
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
-        # Update best param and value. We modify the result here because the
-        # optimizer will consider the max result in its algorithm.
-        # Ref.: https://github.com/optuna/optuna/issues/1728
-        if result > self.init_value:
-            if self.best_value < self.init_value:
-                self.best_value = self.init_value
-            inc = self.inc_factor * (result - self.init_value)
-            self.best_value += inc
-            result = self.best_value
-
-            for k, v in self.test_param.items():
-                self.best_param.update({k: v})
-        else:
-            # Backup study best value and param.
+        if self.fix_base_param:
+            # Backup best value and param.
             if result > self.best_value:
                 self.best_value = result
 
                 for k, v in self.test_param.items():
                     self.best_param.update({k: v})
+        else:
+            # Update best param and value. We modify the result here because the
+            # optimizer will consider the max result in its algorithm.
+            # Ref.: https://github.com/optuna/optuna/issues/1728
+            if result > self.init_value:
+                if self.best_value < self.init_value:
+                    self.best_value = self.init_value
+                inc = self.inc_factor * (result - self.init_value)
+                self.best_value += inc
+                result = self.best_value
+
+                for k, v in self.test_param.items():
+                    self.best_param.update({k: v})
+            else:
+                # Backup study best value and param.
+                if result > self.best_value:
+                    self.best_value = result
+
+                    for k, v in self.test_param.items():
+                        self.best_param.update({k: v})
 
         self.trial_num += 1
 
@@ -233,12 +249,16 @@ def main():
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
+    parser.add_argument('--fix-base-param', action='store_true',
+                        help='A flag to fix the parameter of base engine.\n'
+                             'It will use the init or default parameter values.')
 
     args = parser.parse_args()
 
     trials = args.trials
     init_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
+    fix_base_param = args.fix_base_param
 
     # Number of games should be even for a fair engine match.
     num_games = args.games_per_trial
@@ -316,7 +336,7 @@ def main():
                                  init_value, variant, opening_file,
                                  old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
-                                 proto, args.hash),
+                                 proto, args.hash, fix_base_param),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
