@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.3.0'
+APP_VERSION = 'v0.3.1'
 
 
 class Objective(object):
@@ -58,6 +58,7 @@ class Objective(object):
         # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
         self.fix_base_param = fix_base_param
+        self.good_result_cnt = 0.0
 
     @staticmethod
     def set_param(from_param):
@@ -153,6 +154,7 @@ class Objective(object):
             # optimizer will consider the max result in its algorithm.
             # Ref.: https://github.com/optuna/optuna/issues/1728
             if result > self.init_value:
+                self.good_result_cnt += 1
                 if self.best_value < self.init_value:
                     self.best_value = self.init_value
                 inc = self.inc_factor * (result - self.init_value)
@@ -168,6 +170,8 @@ class Objective(object):
 
                     for k, v in self.test_param.items():
                         self.best_param.update({k: v})
+
+                result = result - 0.01/(self.good_result_cnt + 1)
 
         self.trial_num += 1
 
