@@ -104,6 +104,12 @@ python tuner.py --engine ./engines/deuterium/deuterium.exe --opening-file ./star
   * Games per trial: 24
   * TC: 20s+100ms
   * link: [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
+* Optimization 3
+  * Trials: 32
+  * Games per trial: 100
+  * TC: 10s+100ms
+  * Note: Base engine parameter values are fixed.
+  * link: [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
 
 ## Credits
 * Optuna  
