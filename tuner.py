@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.3.1'
+APP_VERSION = 'v0.4.0'
 
 
 class Objective(object):
@@ -24,7 +24,8 @@ class Objective(object):
                  init_param, init_value, variant, opening_file,
                  old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
-                 proto='uci', hashmb=64, fix_base_param=False):
+                 proto='uci', hashmb=64, fix_base_param=False,
+                 match_manager='cutechess'):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -59,6 +60,7 @@ class Objective(object):
         self.inc_factor = 1/64
         self.fix_base_param = fix_base_param
         self.good_result_cnt = 0.0
+        self.match_manager = match_manager
 
     @staticmethod
     def set_param(from_param):
@@ -109,18 +111,40 @@ class Objective(object):
         print(f'study best param: {self.best_param}')
         print(f'study best value: {self.best_value}')
 
-        # Create command line for the engine match using cutechess-cli.
-        tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
+        # Create command line for the engine match using cutechess-cli or duel.py.
+        # Todo: Refactor this section.
+        if self.match_manager == 'cutechess':
+            tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
+        else:
+            tour_manager = f'python -u ./tourney_manager/duel/duel.py'
+
         command = f' -concurrency {self.concurrency}'
-        command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
-        command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
+
+        if self.match_manager == 'cutechess':
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
+        else:
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
+
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
+
         command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
         command += ' -tournament round-robin'
-        command += f' -rounds {self.rounds} -games 2 -repeat 2'
-        command += f' -openings file={self.opening_file} format=epd'
-        command += ' -resign movecount=6 score=700 twosided=true'
+
+        if self.match_manager == 'cutechess':
+            command += f' -rounds {self.rounds} -games 2 -repeat 2'
+        else:
+            command += f' -rounds {self.rounds} -repeat 2'
+
+        if self.match_manager == 'cutechess':
+            command += f' -openings file={self.opening_file} format=epd'
+            command += ' -resign movecount=6 score=700 twosided=true'
+        else:
+            command += f' -openings file={self.opening_file}'
+            command += ' -resign movecount=6 score=700'
+
         command += ' -draw movenumber=30 movecount=6 score=5'
         command += f' -pgnout {self.pgnout}'
 
@@ -256,6 +280,12 @@ def main():
     parser.add_argument('--fix-base-param', action='store_true',
                         help='A flag to fix the parameter of base engine.\n'
                              'It will use the init or default parameter values.')
+    parser.add_argument('--match-manager', required=False, type=str,
+                        help='The application that handles the engine match, default=cutechess.',
+                        default='cutechess')
+    parser.add_argument('--protocol', required=False, type=str,
+                        help='The protocol that the engine supports, can be uci or cecp, default=uci.',
+                        default='uci')
 
     args = parser.parse_args()
 
@@ -263,6 +293,7 @@ def main():
     init_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
+    match_manager = args.match_manager
 
     # Number of games should be even for a fair engine match.
     num_games = args.games_per_trial
@@ -274,7 +305,7 @@ def main():
     opening_file = args.opening_file
     variant = args.variant
     pgnout = args.pgn_output
-    proto = 'uci'
+    proto = args.protocol
 
     study_name = args.study_name
     storage_file = f'{study_name}.db'
@@ -340,7 +371,8 @@ def main():
                                  init_value, variant, opening_file,
                                  old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
-                                 proto, args.hash, fix_base_param),
+                                 proto, args.hash, fix_base_param,
+                                 match_manager),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
