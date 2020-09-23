@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.4.0'
+APP_VERSION = 'v0.4.1'
 
 
 class Objective(object):
@@ -59,7 +59,7 @@ class Objective(object):
         # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
         self.fix_base_param = fix_base_param
-        self.good_result_cnt = 0.0
+        self.good_result_cnt = 0
         self.match_manager = match_manager
 
     @staticmethod
