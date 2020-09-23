@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.4.3'
+APP_VERSION = 'v0.5.0'
 
 
 class Objective(object):
@@ -298,6 +298,10 @@ def main():
     parser.add_argument('--protocol', required=False, type=str,
                         help='The protocol that the engine supports, can be uci or cecp, default=uci.',
                         default='uci')
+    parser.add_argument('--sampler', required=False, type=str,
+                        help='The sampler to be used in the study,'
+                             ' default=tpe, can be tpe or cmaes.',
+                        default='tpe')
 
     args = parser.parse_args()
 
@@ -306,6 +310,7 @@ def main():
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
     match_manager = args.match_manager
+    args_sampler = args.sampler
 
     # Number of games should be even for a fair engine match.
     num_games = args.games_per_trial
@@ -346,13 +351,24 @@ def main():
     n_trials = save_plots_every_trial
     cycle = 0
 
+    # Define sampler to use, default is TPE.
+    if args_sampler == 'tpe':
+        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
+        sampler = optuna.samplers.TPESampler()
+    elif args_sampler == 'cmaes':
+        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
+        sampler = optuna.samplers.CmaEsSampler()
+    else:
+        msg = f'The sampler {args_sampler} is not suppored. Use tpe or cmaes.'
+        raise ValueError(msg)
+
     while cycle < max_cycle:
         cycle += 1
 
         # Define study.
         study = optuna.create_study(study_name=study_name, direction='maximize',
                                     storage=f'sqlite:///{storage_file}',
-                                    load_if_exists=True)
+                                    load_if_exists=True, sampler=sampler)
 
         # Get the best value from previous study session.
         best_param, best_value = {}, 0.0
