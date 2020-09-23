@@ -38,7 +38,9 @@ Instead of installing each module like optuna, plotly and others. Just install w
 3. After a match of say 24 games, the score of test engine will be sent to the optimizer. The score is just (wins+draw/2)/24 from the point of view of the test engine. If the test engine wins (score > 0.5), update the best parameter to the parameter used by test engine. Increment trial by 1.
 4. Check the number of trials done. If trial >= max_trial stop the optimization. This is done by the optimizer.
 5. Get the new parameter values suggested by the optimizer. This will be used by the test engine.
-6. Run a new match, the base engine will use the best parameter while the test engine will use the new parameter values suggested by the optimizer.
+6. Run a new match  
+  a. The base engine will use the best parameter while the test engine will use the new parameter values suggested by the optimizer.  
+  b. The base engine will always use the initial or default parameter values while the test engine will use the new parameter values suggested by the optimizer.
 7. Goto step 3.
 8. When max_trial is reached, optimization is stopped and png plots will be saved.
 9. You can extend the trials or optimization by running the study again using the same study_name.
@@ -46,9 +48,10 @@ Instead of installing each module like optuna, plotly and others. Just install w
 ## Help
 ```python
 python -u tuner.py -h
-usage: Optuna Game Parameter Tuner v0.3.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                                          [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
-                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param]
+usage: Optuna Game Parameter Tuner v0.4.3 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
+                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
+                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -82,8 +85,11 @@ optional arguments:
                         Save plots every n trials, default=10.
   --fix-base-param      A flag to fix the parameter of base engine.
                         It will use the init or default parameter values.
+  --match-manager MATCH_MANAGER
+                        The application that handles the engine match, default=cutechess.
+  --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
 
-Optuna Game Parameter Tuner v0.3.0
+Optuna Game Parameter Tuner v0.4.3
 ```
 
 ## Command line
