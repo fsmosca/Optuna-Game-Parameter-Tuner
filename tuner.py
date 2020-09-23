@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.4.2'
+APP_VERSION = 'v0.4.3'
 
 
 class Objective(object):
@@ -378,6 +378,7 @@ def main():
         old_trial_num = len(study.trials)
 
         # Begin param optimization.
+        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
         study.optimize(Objective(args.engine, input_param,
                                  best_param, best_value, init_param,
                                  init_value, variant, opening_file,
