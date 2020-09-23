@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.4.1'
+APP_VERSION = 'v0.4.2'
 
 
 class Objective(object):
@@ -166,6 +166,7 @@ class Objective(object):
         result = float(result)
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
+        # If base engine always uses the initial param or default param.
         if self.fix_base_param:
             # Backup best value and param.
             if result > self.best_value:
@@ -173,6 +174,10 @@ class Objective(object):
 
                 for k, v in self.test_param.items():
                     self.best_param.update({k: v})
+
+        # Else if best param used by base engine is dynamic, meaning the base
+        # engine will use the available best param as long as the best value
+        # of this best param is better than the init value.
         else:
             # Update best param and value. We modify the result here because the
             # optimizer will consider the max result in its algorithm.
@@ -195,6 +200,13 @@ class Objective(object):
                     for k, v in self.test_param.items():
                         self.best_param.update({k: v})
 
+                # Adjust the result sent to the optimizer. Given a match
+                # result of 0.48 from trial 0, good_result_cnt of 0 and then
+                # later a match result of 0.48 at trial 50 with good_result_cnt
+                # of 4, the latter performs better and their results are
+                # different in the eyes of the optimizer.
+                # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.470
+                # Trial: 50, good_result_cnt: 0, actual_result: 0.48, result: 0.478
                 result = result - 0.01/(self.good_result_cnt + 1)
 
         self.trial_num += 1
