@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.5.0'
+APP_VERSION = 'v0.5.1'
 
 
 class Objective(object):
@@ -141,11 +141,10 @@ class Objective(object):
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} format=epd'
             command += ' -resign movecount=6 score=700 twosided=true'
+            command += ' -draw movenumber=30 movecount=6 score=5'
         else:
             command += f' -openings file={self.opening_file}'
-            command += ' -resign movecount=6 score=700'
 
-        command += ' -draw movenumber=30 movecount=6 score=5'
         command += f' -pgnout {self.pgnout}'
 
         # Execute the command line to start the match.
