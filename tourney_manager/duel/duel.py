@@ -140,13 +140,16 @@ def turn(fen):
     return False
 
 
-def save_game(outfn, fen, moves, e1, e2, start_turn, gres, termination=''):
+def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
+              termination='', variant=''):
     logging.info('Saving game ...')
     with open(outfn, 'a') as f:
         f.write('[Event "Optimization test"]\n')
         f.write(f'[White "{e1 if start_turn else e2}"]\n')
         f.write(f'[Black "{e1 if not start_turn else e2}"]\n')
         f.write(f'[Result "{gres}"]\n')
+
+        f.write(f'[Variant "{variant}"]\n')
 
         if termination != '':
             f.write(f'[Termination "{termination}"]\n')
@@ -156,8 +159,14 @@ def save_game(outfn, fen, moves, e1, e2, start_turn, gres, termination=''):
         else:
             f.write('\n')
 
-        for m in moves:
-            f.write(f'{m} ')
+        for i, (m, s) in enumerate(zip(moves, scores)):
+            num = i + 1
+            if num % 2 == 0:
+                str_num = f'{num//2}... '
+            else:
+                num += 1
+                str_num = f'{num//2}. '
+            f.write(f'{str_num}{m} {{{s}}} ')
         f.write('\n\n')
 
 
@@ -226,23 +235,30 @@ def adjudicate_draw(score_history, draw_option):
 
 
 def is_game_end(line, test_engine_color):
-    game_end, gres, e1score, termination = False, '*', 0.0, ''
+    game_end, gres, e1score, termination, comment = False, '*', 0.0, '', ''
 
     if '1-0' in line:
         game_end = True
         e1score = 1.0 if test_engine_color else 0.0
         gres = '1-0'
-        termination = 'White mates Black'
+        termination = 'white mates black'
     elif '0-1' in line:
         game_end = True
         e1score = 1.0 if not test_engine_color else 0.0
         gres = '0-1'
-        termination = 'Black mates White'
+        termination = 'black mates white'
     elif '1/2-1/2' in line:
         game_end = True
         e1score = 0.5
         gres = '1/2-1/2'
-        termination = 'Draw'
+        if 'repetition' in line.lower():
+            termination = 'draw by repetition'
+        elif 'insufficient' in line.lower():
+            termination = 'draw by insufficient mating material'
+        elif 'fifty' in line.lower():
+            termination = 'draw by insufficient mating material'
+        elif 'stalemate' in line.lower():
+            termination = 'draw by stalemate'
 
     return game_end, gres, e1score, termination
 
@@ -508,8 +524,9 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
             current_color = not current_color
 
         if output_game_file is not None:
-            save_game(output_game_file, fen, move_hist, eng[0]["name"],
-                      eng[1]["name"], start_turn, gres, termination)
+            save_game(output_game_file, fen, move_hist, score_history,
+                      eng[0]["name"], eng[1]["name"], start_turn, gres,
+                      termination, variant)
 
         for i, e in enumerate(eng):
             e['proc'].stdin.write('quit\n')
