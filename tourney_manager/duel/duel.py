@@ -162,10 +162,16 @@ def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
         for i, (m, s) in enumerate(zip(moves, scores)):
             num = i + 1
             if num % 2 == 0:
-                str_num = f'{num//2}... '
+                if start_turn:
+                    str_num = f'{num // 2}... '
+                else:
+                    str_num = f'{num // 2}. '
             else:
                 num += 1
-                str_num = f'{num//2}. '
+                if start_turn:
+                    str_num = f'{num // 2}. '
+                else:
+                    str_num = f'{num // 2}... '
             f.write(f'{str_num}{m} {{{s}}} ')
         f.write('\n\n')
 
