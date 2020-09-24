@@ -51,10 +51,14 @@ It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/genera
 ## Help
 ```python
 python -u tuner.py -h
-usage: Optuna Game Parameter Tuner v0.4.3 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
-                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
-                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
-                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
+usage: Optuna Game Parameter Tuner v0.5.1 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS]
+                                          [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
+                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
+                                          [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
+                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot]
+                                          [--initial-best-value INITIAL_BEST_VALUE]
+                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param]
+                                          [--match-manager MATCH_MANAGER] [--protocol PROTOCOL] [--sampler SAMPLER]
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -91,8 +95,9 @@ optional arguments:
   --match-manager MATCH_MANAGER
                         The application that handles the engine match, default=cutechess.
   --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
+  --sampler SAMPLER     The sampler to be used in the study, default=tpe, can be tpe or cmaes.
 
-Optuna Game Parameter Tuner v0.4.3
+Optuna Game Parameter Tuner v0.5.1
 ```
 
 ## Command line
