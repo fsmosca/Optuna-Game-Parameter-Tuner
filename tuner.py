@@ -4,6 +4,7 @@ import copy
 from collections import OrderedDict
 import argparse
 from pathlib import Path
+import ast
 
 import optuna
 
@@ -16,7 +17,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.6.0'
+APP_VERSION = 'v0.7.0'
 
 
 class Objective(object):
@@ -320,6 +321,13 @@ def main():
                         help='The sampler to be used in the study,'
                              ' default=tpe, can be tpe or cmaes.',
                         default='tpe')
+    parser.add_argument('--input-param', required=True, type=str,
+                        help='The parameters that will be optimized.\n'
+                             'Example 1 with 1 parameter:\n'
+                             '--input-param \"{\'pawn\': {\'default\': 92, \'min\': 90, \'max\': 120, \'step\': 2}}\"\n'
+                             'Example 2 with 2 parameters:\n'
+                             '--input-param \"{\'pawn\': {\'default\': 92, \'min\': 90, \'max\': 120, \'step\': 2}, \'knight\': {\'default\': 300, \'min\': 250, \'max\': 350, \'step\': 2}}\"'
+                        )
 
     args = parser.parse_args()
 
@@ -347,14 +355,9 @@ def main():
 
     print(f'trials: {trials}, games_per_trial: {rounds * 2}')
 
-    # Define the parameters that will be optimized.
-    input_param = OrderedDict()
-    input_param.update({'PawnValueEn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}})
-    input_param.update({'BishopValueOp': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
-    input_param.update({'BishopValueEn': {'default': 350, 'min': 300, 'max': 360, 'step': 3}})
-    input_param.update({'RookValueEn': {'default': 525, 'min': 490, 'max': 550, 'step': 5}})
-    input_param.update({'QueenValueOp': {'default': 985, 'min': 975, 'max': 1050, 'step': 5}})
-    input_param.update({'MobilityWeight': {'default': 100, 'min': 50, 'max': 150, 'step': 4}})
+    # Convert the input param string to a dict of dict and sort by key.
+    input_param = ast.literal_eval(args.input_param)
+    input_param = OrderedDict(sorted(input_param.items()))
 
     print(f'input param: {input_param}\n')
     init_param = Objective.set_param(input_param)
