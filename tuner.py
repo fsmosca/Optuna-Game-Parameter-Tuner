@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.7.0'
+APP_VERSION = 'v0.8.0'
 
 
 class Objective(object):
@@ -26,7 +26,7 @@ class Objective(object):
                  old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
-                 match_manager='cutechess'):
+                 match_manager='cutechess', good_result_cnt=0):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -60,7 +60,7 @@ class Objective(object):
         # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
         self.fix_base_param = fix_base_param
-        self.good_result_cnt = 0
+        self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
 
     def read_result(self, line: str) -> float:
@@ -350,6 +350,8 @@ def main():
     pgnout = args.pgn_output
     proto = args.protocol
 
+    good_result_cnt = 0
+
     study_name = args.study_name
     storage_file = f'{study_name}.db'
 
@@ -392,9 +394,10 @@ def main():
                                     load_if_exists=True, sampler=sampler)
 
         # Get the best value from previous study session.
-        best_param, best_value = {}, 0.0
+        best_param, best_value, is_study = {}, 0.0, False
         try:
             best_value = study.best_value
+            is_study = True
         except ValueError:
             print('Warning, best value from previous trial is not found!')
         except:
@@ -414,6 +417,13 @@ def main():
 
         old_trial_num = len(study.trials)
 
+        # Get the good result count before we resume the study.
+        if is_panda_ok and not fix_base_param and is_study:
+            df = study.trials_dataframe(attrs=('value', 'state'))
+            for index, row in df.iterrows():
+                if row['value'] > init_value and row['state'] == 'COMPLETE':
+                    good_result_cnt += 1
+
         # Begin param optimization.
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
         study.optimize(Objective(args.engine, input_param,
@@ -422,7 +432,7 @@ def main():
                                  old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
-                                 match_manager),
+                                 match_manager, good_result_cnt),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
