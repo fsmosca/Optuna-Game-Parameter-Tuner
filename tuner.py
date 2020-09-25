@@ -1,3 +1,19 @@
+#!/usr/bin/env python
+
+
+"""Optuna Game Parameter Tuner
+
+Game parameter tuner using optuna framework. The game can be a chess or
+chess variants. Parameters can be piece values for evaluations or
+futility pruning margin for search."""
+
+
+__author__ = 'fsmosca'
+__script_name__ = 'Optuna Game Parameter Tuner'
+__version__ = 'v0.8.1'
+__credits__ = ['joergoster', 'musketeerchess', 'optuna']
+
+
 import sys
 from subprocess import Popen, PIPE
 import copy
@@ -14,10 +30,6 @@ try:
 except ModuleNotFoundError:
     is_panda_ok = False
     print('Warning! pandas is not installed.')
-
-
-APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.8.0'
 
 
 class Objective(object):
@@ -64,9 +76,7 @@ class Objective(object):
         self.match_manager = match_manager
 
     def read_result(self, line: str) -> float:
-        """
-        Read result output line from match manager.
-        """
+        """Read result output line from match manager."""
         match_man = self.match_manager
         if match_man == 'cutechess':
             # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
@@ -268,7 +278,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
-        prog='%s %s' % (APP_NAME, APP_VERSION),
+        prog='%s %s' % (__script_name__, __version__),
         description='Optimize parameter values of a game agent using optuna framework.',
         epilog='%(prog)s')
     parser.add_argument('--engine', required=True,
