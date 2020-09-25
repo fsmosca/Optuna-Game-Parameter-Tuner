@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 
 
 APP_NAME = 'Optuna Game Parameter Tuner'
-APP_VERSION = 'v0.5.1'
+APP_VERSION = 'v0.6.0'
 
 
 class Objective(object):
@@ -61,6 +61,26 @@ class Objective(object):
         self.fix_base_param = fix_base_param
         self.good_result_cnt = 0
         self.match_manager = match_manager
+
+    def read_result(self, line: str) -> float:
+        """
+        Read result output line from match manager.
+        """
+        match_man = self.match_manager
+        if match_man == 'cutechess':
+            # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
+            num_wins = int(line.split(': ')[1].split(' -')[0])
+            num_draws = int(line.split(': ')[1].split('-')[2].strip().split()[0])
+            num_games = int(line.split('] ')[1].strip())
+            result = (num_wins + num_draws / 2) / num_games
+        elif match_man == 'duel':
+            # Score of e1 vs e2: [0.4575]
+            result = float(line.split('[')[1].split(']')[0])
+        else:
+            print(f'Error, match_manager {match_man} is not supported.')
+            raise
+
+        return result
 
     @staticmethod
     def set_param(from_param):
@@ -157,12 +177,11 @@ class Objective(object):
         result = ""
         for line in output.splitlines():
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result = line[line.find("[") + 1: line.find("]")]
+                result = self.read_result(line)
 
         if result == "":
             raise Exception('The match did not terminate properly!')
 
-        result = float(result)
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
         # If base engine always uses the initial param or default param.
