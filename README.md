@@ -49,16 +49,13 @@ Instead of installing each module like optuna, plotly and others. Just install w
 It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize) with default [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) (Tree-structured Parzen Estimator Approach) as surrogate model or sampler. Optuna has some [samplers](https://optuna.readthedocs.io/en/stable/reference/samplers.html) that can be used in the optimization. Currently only the default TPE and an optional [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) are supported by this tuner.
 
 ## Help
-```python
+```c++
 python -u tuner.py -h
-usage: Optuna Game Parameter Tuner v0.5.1 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS]
-                                          [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
-                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                                          [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
-                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot]
-                                          [--initial-best-value INITIAL_BEST_VALUE]
-                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param]
-                                          [--match-manager MATCH_MANAGER] [--protocol PROTOCOL] [--sampler SAMPLER]
+usage: Optuna Game Parameter Tuner v0.7.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
+                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
+                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
+                                          [--sampler SAMPLER] --input-param INPUT_PARAM
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -96,8 +93,14 @@ optional arguments:
                         The application that handles the engine match, default=cutechess.
   --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
   --sampler SAMPLER     The sampler to be used in the study, default=tpe, can be tpe or cmaes.
+  --input-param INPUT_PARAM
+                        The parameters that will be optimized.
+                        Example 1 with 1 parameter:
+                        --input-param "{'pawn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}}"
+                        Example 2 with 2 parameters:
+                        --input-param "{'pawn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}, 'knight': {'default': 300, 'min': 250, 'max': 350, 'step': 2}}"
 
-Optuna Game Parameter Tuner v0.5.1
+Optuna Game Parameter Tuner v0.7.0
 ```
 
 ## Command line
