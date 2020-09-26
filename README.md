@@ -51,11 +51,11 @@ It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/genera
 ## Help
 ```c++
 python -u tuner.py -h
-usage: Optuna Game Parameter Tuner v0.7.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
-                                          [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] --opening-file OPENING_FILE
-                                          [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
-                                          [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
-                                          [--sampler SAMPLER] --input-param INPUT_PARAM
+usage: Optuna Game Parameter Tuner v0.8.6 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME]
+                                          [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] [--depth DEPTH] --opening-file OPENING_FILE [--variant VARIANT]
+                                          [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE] [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL]
+                                          [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL] [--sampler SAMPLER] [--tpe-ei-samples TPE_EI_SAMPLES] --input-param
+                                          INPUT_PARAM
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -76,8 +76,17 @@ optional arguments:
                         Base time in sec for time control, default=5.
   --inc-time-sec INC_TIME_SEC
                         Increment time in sec for time control, default=0.05.
+  --depth DEPTH         The maximum search depth that the engine is allowed, default=1000.
+                        Example:
+                        python tuner.py --depth 6 ...
+                        If depth is high say 24 and you want this depth
+                        to be always respected increase the base time control.
+                        tuner.py --depth 24 --base-time-sec 300 ...
   --opening-file OPENING_FILE
-                        Start opening filename in fen or epd format.
+                        Start opening filename in pgn, fen or epd format.
+                        If match manager is cutechess, you can use pgn, fen
+                        or epd format. The format is hard-coded currently.
+                        You have to modify the code.
   --variant VARIANT     Game variant, default=normal.
   --pgn-output PGN_OUTPUT
                         Output pgn filename, default=optuna_games.pgn.
@@ -93,6 +102,8 @@ optional arguments:
                         The application that handles the engine match, default=cutechess.
   --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
   --sampler SAMPLER     The sampler to be used in the study, default=tpe, can be tpe or cmaes.
+  --tpe-ei-samples TPE_EI_SAMPLES
+                        The number of candidate samples used to calculate ei or expected improvement, default=24.
   --input-param INPUT_PARAM
                         The parameters that will be optimized.
                         Example 1 with 1 parameter:
@@ -100,7 +111,7 @@ optional arguments:
                         Example 2 with 2 parameters:
                         --input-param "{'pawn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}, 'knight': {'default': 300, 'min': 250, 'max': 350, 'step': 2}}"
 
-Optuna Game Parameter Tuner v0.7.0
+Optuna Game Parameter Tuner v0.8.6
 ```
 
 ## Command line
