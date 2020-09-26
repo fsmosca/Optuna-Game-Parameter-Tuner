@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.2'
+__version__ = 'v0.8.3'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -344,6 +344,11 @@ def main():
                         help='The sampler to be used in the study,'
                              ' default=tpe, can be tpe or cmaes.',
                         default='tpe')
+    parser.add_argument('--tpe-ei-samples', required=False, type=int,
+                        help='The number of candidate samples used'
+                             ' to calculate ei or expected improvement,'
+                             ' default=24.',
+                        default=24)
     parser.add_argument('--input-param', required=True, type=str,
                         help='The parameters that will be optimized.\n'
                              'Example 1 with 1 parameter:\n'
@@ -400,7 +405,7 @@ def main():
     # Define sampler to use, default is TPE.
     if args_sampler == 'tpe':
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
-        sampler = optuna.samplers.TPESampler()
+        sampler = optuna.samplers.TPESampler(n_ei_candidates=args.tpe_ei_samples)
     elif args_sampler == 'cmaes':
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
         sampler = optuna.samplers.CmaEsSampler()
