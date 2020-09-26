@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.1'
+__version__ = 'v0.8.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -38,7 +38,8 @@ class Objective(object):
                  old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
-                 match_manager='cutechess', good_result_cnt=0):
+                 match_manager='cutechess', good_result_cnt=0,
+                 depth=1000):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -74,6 +75,7 @@ class Objective(object):
         self.fix_base_param = fix_base_param
         self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
+        self.depth = depth
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -161,13 +163,14 @@ class Objective(object):
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
 
-        command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
         command += ' -tournament round-robin'
 
         if self.match_manager == 'cutechess':
             command += f' -rounds {self.rounds} -games 2 -repeat 2'
+            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
         else:
             command += f' -rounds {self.rounds} -repeat 2'
+            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} format=epd'
@@ -304,6 +307,16 @@ def main():
     parser.add_argument('--inc-time-sec', required=False, type=float,
                         help='Increment time in sec for time control, default=0.05.',
                         default=0.05)
+    parser.add_argument('--depth', required=False, type=int,
+                        help='The maximum search depth that the engine is'
+                             ' allowed, default=1000.\n'
+                             'Example:\n'
+                             'python tuner.py --depth 6 ...\n'
+                             'If depth is high say 24 and you want this depth\n'
+                             'to be always respected increase the base time'
+                             ' control.\n'
+                             'tuner.py --depth 24 --base-time-sec 300 ...',
+                        default=1000)
     parser.add_argument('--opening-file', required=True, type=str,
                         help='Start opening filename in fen or epd format.')
     parser.add_argument('--variant', required=False, type=str,
@@ -442,7 +455,7 @@ def main():
                                  old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
-                                 match_manager, good_result_cnt),
+                                 match_manager, good_result_cnt, args.depth),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
