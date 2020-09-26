@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.4'
+__version__ = 'v0.8.5'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -318,7 +318,10 @@ def main():
                              'tuner.py --depth 24 --base-time-sec 300 ...',
                         default=1000)
     parser.add_argument('--opening-file', required=True, type=str,
-                        help='Start opening filename in fen or epd format.')
+                        help='Start opening filename in pgn, fen or epd format.\n'
+                             'If match manager is cutechess, you can use pgn, fen\n'
+                             'or epd format. The format is hard-coded currently.\n'
+                             'You have to modify the code.')
     parser.add_argument('--variant', required=False, type=str,
                         help='Game variant, default=normal.', default='normal')
     parser.add_argument('--pgn-output', required=False, type=str,
