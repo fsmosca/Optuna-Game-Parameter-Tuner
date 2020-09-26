@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.3'
+__version__ = 'v0.8.4'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -238,7 +238,7 @@ class Objective(object):
                 # of 4, the latter performs better and their results are
                 # different in the eyes of the optimizer.
                 # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.470
-                # Trial: 50, good_result_cnt: 0, actual_result: 0.48, result: 0.478
+                # Trial: 50, good_result_cnt: 4, actual_result: 0.48, result: 0.478
                 result = result - 0.01/(self.good_result_cnt + 1)
 
         self.trial_num += 1
