@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.5'
+__version__ = 'v0.8.6'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -255,7 +255,6 @@ def save_plots(study, study_name, input_param, is_plot=False):
     trials = len(study.trials)
 
     # Make sure there is a visuals folder in the current working folder.
-    # Todo: Make an option with default value visuals
     pre_name = f'./visuals/{study_name}_{trials}'
 
     fig = optuna.visualization.plot_optimization_history(study)
