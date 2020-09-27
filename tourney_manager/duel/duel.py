@@ -173,6 +173,8 @@ def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
                 else:
                     str_num = f'{num // 2}... '
             f.write(f'{str_num}{m} {{{s}}} ')
+            if (i + 1) % 5 == 0:
+                f.write('\n')
         f.write('\n\n')
 
 
