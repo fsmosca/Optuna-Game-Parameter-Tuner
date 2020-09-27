@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.8.6'
+__version__ = 'v0.9.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -76,10 +76,13 @@ class Objective(object):
         self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
         self.depth = depth
+        self.games_per_trial = self.rounds * 2
+        self.startup_trials = 10
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
         match_man = self.match_manager
+
         if match_man == 'cutechess':
             # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
             num_wins = int(line.split(': ')[1].split(' -')[0])
@@ -87,13 +90,14 @@ class Objective(object):
             num_games = int(line.split('] ')[1].strip())
             result = (num_wins + num_draws / 2) / num_games
         elif match_man == 'duel':
-            # Score of e1 vs e2: [0.4575]
+            # Score of e1 vs e2: [0.4575] 20
             result = float(line.split('[')[1].split(']')[0])
+            num_games = int(line.split('] ')[1].strip())
         else:
             print(f'Error, match_manager {match_man} is not supported.')
             raise
 
-        return result
+        return result, num_games
 
     @staticmethod
     def set_param(from_param):
@@ -169,7 +173,7 @@ class Objective(object):
             command += f' -rounds {self.rounds} -games 2 -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
         else:
-            command += f' -rounds {self.rounds} -repeat 2'
+            command += f' -rounds {self.rounds*2} -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if self.match_manager == 'cutechess':
@@ -181,20 +185,39 @@ class Objective(object):
 
         command += f' -pgnout {self.pgnout}'
 
+        terminate_match, result = False, ""
+
         # Execute the command line to start the match.
         process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
-        output = process.communicate()[0]
-        if process.returncode != 0:
-            print('Could not execute command: %s' % command)
-            return 2
-
-        result = ""
-        for line in output.splitlines():
+        for eline in iter(process.stdout.readline, ''):
+            line = eline.strip()
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result = self.read_result(line)
+                result, done_num_games = self.read_result(line)
 
-        if result == "":
-            raise Exception('The match did not terminate properly!')
+                if (self.trial_num > 4 and done_num_games > self.games_per_trial//2
+                        and result < 0.45 and self.match_manager == 'cutechess'):
+                    process.terminate()
+
+                    while True:
+                        process.wait(timeout=1)
+                        if process.poll() is not None:
+                            break
+
+                    terminate_match = True
+                    break
+                else:
+                    if 'Finished match' in line:
+                        break
+
+        # Prune trials that are not promising. If number of games
+        # per trial is 100 and after 50 games, its result is below 0.45 or 45%
+        # then we stop this trial. Get new param values and start a new trial.
+        trial.report(result, done_num_games)
+        if terminate_match:
+            if self.trial_num > self.startup_trials and trial.should_prune():
+                self.trial_num += 1
+                print(f'status: prune, trial: {self.trial_num}, done_games: {done_num_games}, total_games:{self.rounds * 2}, current_result: {result}')
+                raise optuna.TrialPruned()
 
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
@@ -346,6 +369,21 @@ def main():
                         help='The sampler to be used in the study,'
                              ' default=tpe, can be tpe or cmaes.',
                         default='tpe')
+    parser.add_argument('--trial-pruning', required=False, nargs='*', action='append',
+                        metavar=('name=', 'result='),
+                        help='A trial pruner used to prune or stop unpromising'
+                             ' trials, default=None.\n'
+                             'Example:\n'
+                             'tuner.py --trial-pruning name=threshold_pruner result=0.45 games=50 ...\n'
+                             'Assuming games per trial is 100, after 50 games, check\n'
+                             'the score of the match, if this is below 0.45, then\n'
+                             'prune the trial or stop the engine match. Get new param\n'
+                             'from optimizer and start a new trial.\n'
+                             'Default values:\n'
+                             'result=0.45, games=games_per_trial/2\n'
+                             'Example:\n'
+                             'tuner.py --trial-pruning name=threshold_pruner ...',
+                        default=None)
     parser.add_argument('--tpe-ei-samples', required=False, type=int,
                         help='The number of candidate samples used'
                              ' to calculate ei or expected improvement,'
@@ -415,13 +453,39 @@ def main():
         msg = f'The sampler {args_sampler} is not suppored. Use tpe or cmaes.'
         raise ValueError(msg)
 
+    # Trial Pruner, if after half of games in a trial the result is below
+    # 0.45, prune the trial. Take new param values from optimizer and start
+    # a new trial.
+    if args.trial_pruning is not None:
+        tp_name = ''
+        tp_result = 0.45  # Prune if result is below this.
+        tp_games = num_games//2  # Prune if played games is above this.
+
+        for opt in args.trial_pruning:
+            for value in opt:
+                if 'name=' in value:
+                    tp_name = value.split('=')[1]
+                elif 'result=' in value:
+                    tp_result = float(value.split('=')[1])
+                elif 'games=' in value:
+                    tp_games = int(value.split('=')[1])
+        if tp_name == 'threshold_pruner':
+            print(f'name: {tp_name}, result: {tp_result}, games: {tp_games}')
+            pruner = optuna.pruners.ThresholdPruner(
+                lower=tp_result, n_warmup_steps=tp_games, interval_steps=1)
+        else:
+            pruner = None
+    else:
+        pruner = args.trial_pruning
+
     while cycle < max_cycle:
         cycle += 1
 
         # Define study.
         study = optuna.create_study(study_name=study_name, direction='maximize',
                                     storage=f'sqlite:///{storage_file}',
-                                    load_if_exists=True, sampler=sampler)
+                                    load_if_exists=True, sampler=sampler,
+                                    pruner=pruner)
 
         # Get the best value from previous study session.
         best_param, best_value, is_study = {}, 0.0, False
