@@ -13,6 +13,7 @@ import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor
 import logging
 from statistics import mean
+from typing import List
 
 
 logging.basicConfig(
@@ -322,13 +323,13 @@ def time_forfeit(is_timeup, current_color, test_engine_color):
 
 
 def match(e1, e2, fen, output_game_file, variant, draw_option,
-          resign_option, repeat=2):
+          resign_option, repeat=2) -> List[float]:
     """
     Run an engine match between e1 and e2. Save the game and print result
     from e1 perspective.
     """
     move_hist = []
-    all_e1score = 0.0
+    all_e1score = []
     is_show_search_info = False
 
     # Start engine match, 2 games will be played.
@@ -540,13 +541,13 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
             e['proc'].stdin.write('quit\n')
             logging.debug(f'{e["name"]} > quit')
 
-        all_e1score += e1score
+        all_e1score.append(e1score)
 
-    return all_e1score/repeat
+    return all_e1score
 
 
-def round_match(fen, e1, e2, output_game_file, repeat,
-                draw_option, resign_option, variant, posround=1):
+def round_match(fen, e1, e2, output_game_file, repeat, draw_option,
+                resign_option, variant, posround=1) -> List[float]:
     """
     Play a match between e1 and e2 using fen as starting position. By default
     2 games will be played color is reversed. If posround is more than 1, the
@@ -671,7 +672,6 @@ def main():
     # Start match
     joblist = []
     test_engine_score_list = []
-    match_done = 0
     total_games = max(1, args.rounds // args.repeat)
 
     # Use Python 3.8 or higher
@@ -688,13 +688,16 @@ def main():
         for future in concurrent.futures.as_completed(joblist):
             try:
                 test_engine_score = future.result()[0]
-                test_engine_score_list.append(test_engine_score)
-                match_done += 1
+                for s in test_engine_score:
+                    test_engine_score_list.append(s)
+                perf = mean(test_engine_score_list)
+                games = len(test_engine_score_list)
+                print(f'Score of {e1["name"]} vs {e2["name"]}: [{perf}] {games}')
             except concurrent.futures.process.BrokenProcessPool as ex:
                 print(f'exception: {ex}')
 
     logging.info(f'final test score: {mean(test_engine_score_list)}')
-    print(f'Score of {e1["name"]} vs {e2["name"]}: [{mean(test_engine_score_list)}]')
+    print('Finished match')
 
 
 if __name__ == '__main__':
