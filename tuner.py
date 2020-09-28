@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.9.1'
+__version__ = 'v0.10.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -39,7 +39,9 @@ class Objective(object):
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
-                 depth=1000):
+                 depth=1000, threshold_pruner_name='',
+                 threshold_pruner_result=0.45,
+                 threshold_pruner_games=16):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -77,7 +79,11 @@ class Objective(object):
         self.match_manager = match_manager
         self.depth = depth
         self.games_per_trial = self.rounds * 2
+
         self.startup_trials = 10
+        self.threshold_pruner_name = threshold_pruner_name
+        self.threshold_pruner_result = threshold_pruner_result
+        self.threshold_pruner_games = threshold_pruner_games
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -199,8 +205,12 @@ class Objective(object):
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
                 result, done_num_games = self.read_result(line)
 
-                if (self.trial_num > 4 and done_num_games > self.games_per_trial//2
-                        and result < 0.45 and self.match_manager == 'cutechess'):
+                # Check if we will prune this trial.
+                if (self.threshold_pruner_name != ''
+                        and self.trial_num > self.startup_trials
+                        and done_num_games > self.threshold_pruner_games
+                        and result < self.threshold_pruner_result
+                        and self.match_manager == 'cutechess'):
                     process.terminate()
 
                     while True:
@@ -223,7 +233,7 @@ class Objective(object):
         # then we stop this trial. Get new param values and start a new trial.
         trial.report(result, done_num_games)
         if terminate_match:
-            if self.trial_num > self.startup_trials and trial.should_prune():
+            if trial.should_prune():
                 self.trial_num += 1
                 print(f'status: prune, trial: {self.trial_num}, done_games: {done_num_games}, total_games:{self.rounds * 2}, current_result: {result}')
                 raise optuna.TrialPruned()
@@ -465,11 +475,11 @@ def main():
     # Trial Pruner, if after half of games in a trial the result is below
     # 0.45, prune the trial. Take new param values from optimizer and start
     # a new trial.
-    if args.trial_pruning is not None:
-        tp_name = ''
-        tp_result = 0.45  # Prune if result is below this.
-        tp_games = num_games//2  # Prune if played games is above this.
+    tp_name = ''
+    tp_result = 0.45  # Prune if result is below this.
+    tp_games = num_games // 2  # Prune if played games is above this.
 
+    if args.trial_pruning is not None:
         for opt in args.trial_pruning:
             for value in opt:
                 if 'name=' in value:
@@ -535,7 +545,8 @@ def main():
                                  old_trial_num, pgnout, base_time_sec,
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
-                                 match_manager, good_result_cnt, args.depth),
+                                 match_manager, good_result_cnt, args.depth,
+                                 tp_name, tp_result, tp_games),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
