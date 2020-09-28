@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.10.1'
+__version__ = 'v0.10.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -41,7 +41,7 @@ class Objective(object):
                  match_manager='cutechess', good_result_cnt=0,
                  depth=1000, threshold_pruner_name='',
                  threshold_pruner_result=0.45,
-                 threshold_pruner_games=16):
+                 threshold_pruner_games=16, games_per_trial=32):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -78,7 +78,7 @@ class Objective(object):
         self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
         self.depth = depth
-        self.games_per_trial = self.rounds * 2
+        self.games_per_trial = games_per_trial
 
         self.startup_trials = 10
         self.threshold_pruner_name = threshold_pruner_name
@@ -236,9 +236,9 @@ class Objective(object):
         if terminate_match:
             if trial.should_prune():
                 self.trial_num += 1
-                print(f'status: prune, trial: {self.trial_num},'
+                print(f'status: pruned, trial: {self.trial_num},'
                       f' done_games: {done_num_games},'
-                      f' total_games:{self.rounds * 2},'
+                      f' total_games: {self.games_per_trial},'
                       f' current_result: {result}')
                 raise optuna.TrialPruned()
 
@@ -437,9 +437,9 @@ def main():
     args_sampler = args.sampler
 
     # Number of games should be even for a fair engine match.
-    num_games = args.games_per_trial
-    num_games += 1 if (args.games_per_trial % 2) != 0 else 0
-    rounds = num_games//2
+    games_per_trial = args.games_per_trial
+    games_per_trial += 1 if (args.games_per_trial % 2) != 0 else 0
+    rounds = games_per_trial//2
 
     base_time_sec = args.base_time_sec
     inc_time_sec = args.inc_time_sec
@@ -489,7 +489,7 @@ def main():
     # a new trial.
     tp_name = ''
     tp_result = 0.45  # Prune if result is below this.
-    tp_games = num_games // 2  # Prune if played games is above this.
+    tp_games = games_per_trial // 2  # Prune if played games is above this.
 
     if args.trial_pruning is not None:
         for opt in args.trial_pruning:
@@ -559,7 +559,8 @@ def main():
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
                                  match_manager, good_result_cnt, args.depth,
-                                 tp_name, tp_result, tp_games),
+                                 tp_name, tp_result, tp_games,
+                                 games_per_trial),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
