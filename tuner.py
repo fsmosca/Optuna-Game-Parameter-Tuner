@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.10.0'
+__version__ = 'v0.10.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -117,7 +117,7 @@ class Objective(object):
         if self.match_manager == 'cutechess':
             tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
         else:
-            tour_manager = f'python -u ./tourney_manager/duel/duel.py'
+            tour_manager = 'python -u ./tourney_manager/duel/duel.py'
 
         command = f' -concurrency {self.concurrency}'
 
@@ -195,8 +195,9 @@ class Objective(object):
         # Run engine vs engine match.
         terminate_match, result = False, ''
 
-        # Create command line for the engine match using cutechess-cli or duel.py.
-        tour_manager, command = self.get_match_commands(test_options, base_options)
+        # Create command line for engine match using cutechess-cli or duel.py.
+        tour_manager, command = self.get_match_commands(test_options,
+                                                        base_options)
 
         # Execute the command line to start the match.
         process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
@@ -235,7 +236,10 @@ class Objective(object):
         if terminate_match:
             if trial.should_prune():
                 self.trial_num += 1
-                print(f'status: prune, trial: {self.trial_num}, done_games: {done_num_games}, total_games:{self.rounds * 2}, current_result: {result}')
+                print(f'status: prune, trial: {self.trial_num},'
+                      f' done_games: {done_num_games},'
+                      f' total_games:{self.rounds * 2},'
+                      f' current_result: {result}')
                 raise optuna.TrialPruned()
 
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
@@ -379,10 +383,12 @@ def main():
                         help='A flag to fix the parameter of base engine.\n'
                              'It will use the init or default parameter values.')
     parser.add_argument('--match-manager', required=False, type=str,
-                        help='The application that handles the engine match, default=cutechess.',
+                        help='The application that handles the engine match,'
+                             ' default=cutechess.',
                         default='cutechess')
     parser.add_argument('--protocol', required=False, type=str,
-                        help='The protocol that the engine supports, can be uci or cecp, default=uci.',
+                        help='The protocol that the engine supports, can be'
+                             ' uci or cecp, default=uci.',
                         default='uci')
     parser.add_argument('--sampler', required=False, type=str,
                         help='The sampler to be used in the study,'
@@ -393,7 +399,8 @@ def main():
                         help='A trial pruner used to prune or stop unpromising'
                              ' trials, default=None.\n'
                              'Example:\n'
-                             'tuner.py --trial-pruning name=threshold_pruner result=0.45 games=50 ...\n'
+                             'tuner.py --trial-pruning name=threshold_pruner'
+                             ' result=0.45 games=50 ...\n'
                              'Assuming games per trial is 100, after 50 games, check\n'
                              'the score of the match, if this is below 0.45, then\n'
                              'prune the trial or stop the engine match. Get new param\n'
@@ -411,9 +418,13 @@ def main():
     parser.add_argument('--input-param', required=True, type=str,
                         help='The parameters that will be optimized.\n'
                              'Example 1 with 1 parameter:\n'
-                             '--input-param \"{\'pawn\': {\'default\': 92, \'min\': 90, \'max\': 120, \'step\': 2}}\"\n'
+                             '--input-param \"{\'pawn\': {\'default\': 92,'
+                             ' \'min\': 90, \'max\': 120, \'step\': 2}}\"\n'
                              'Example 2 with 2 parameters:\n'
-                             '--input-param \"{\'pawn\': {\'default\': 92, \'min\': 90, \'max\': 120, \'step\': 2}, \'knight\': {\'default\': 300, \'min\': 250, \'max\': 350, \'step\': 2}}\"'
+                             '--input-param \"{\'pawn\': {\'default\': 92,'
+                             ' \'min\': 90, \'max\': 120, \'step\': 2},'
+                             ' \'knight\': {\'default\': 300, \'min\': 250,'
+                             ' \'max\': 350, \'step\': 2}}\"'
                         )
 
     args = parser.parse_args()
@@ -464,7 +475,8 @@ def main():
     # Define sampler to use, default is TPE.
     if args_sampler == 'tpe':
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
-        sampler = optuna.samplers.TPESampler(n_ei_candidates=args.tpe_ei_samples)
+        sampler = optuna.samplers.TPESampler(
+            n_ei_candidates=args.tpe_ei_samples)
     elif args_sampler == 'cmaes':
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
         sampler = optuna.samplers.CmaEsSampler()
@@ -501,7 +513,8 @@ def main():
         cycle += 1
 
         # Define study.
-        study = optuna.create_study(study_name=study_name, direction='maximize',
+        study = optuna.create_study(study_name=study_name,
+                                    direction='maximize',
                                     storage=f'sqlite:///{storage_file}',
                                     load_if_exists=True, sampler=sampler,
                                     pruner=pruner)
@@ -554,7 +567,8 @@ def main():
 
         # Build pandas dataframe, print and save to csv file.
         if is_panda_ok:
-            df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+            df = study.trials_dataframe(attrs=('number', 'value', 'params',
+                                               'state'))
             print(df.to_string(index=False))
             df.to_csv(f'{study_name}.csv', index=False)
 
