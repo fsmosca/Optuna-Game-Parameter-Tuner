@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.9.0'
+__version__ = 'v0.9.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -107,6 +107,44 @@ class Objective(object):
 
         return new_param
 
+    def get_match_commands(self, test_options, base_options):
+        if self.match_manager == 'cutechess':
+            tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
+        else:
+            tour_manager = f'python -u ./tourney_manager/duel/duel.py'
+
+        command = f' -concurrency {self.concurrency}'
+
+        if self.match_manager == 'cutechess':
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
+        else:
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
+
+        if self.variant != 'normal':
+            command += f' -variant {self.variant}'
+
+        command += ' -tournament round-robin'
+
+        if self.match_manager == 'cutechess':
+            command += f' -rounds {self.rounds} -games 2 -repeat 2'
+            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
+        else:
+            command += f' -rounds {self.rounds*2} -repeat 2'
+            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
+
+        if self.match_manager == 'cutechess':
+            command += f' -openings file={self.opening_file} format=epd'
+            command += ' -resign movecount=6 score=700 twosided=true'
+            command += ' -draw movenumber=30 movecount=6 score=5'
+        else:
+            command += f' -openings file={self.opening_file}'
+
+        command += f' -pgnout {self.pgnout}'
+
+        return tour_manager, command
+
     def __call__(self, trial):
         print()
         print(f'starting trial: {self.trial_num} ...')
@@ -148,44 +186,11 @@ class Objective(object):
         print(f'study best param: {self.best_param}')
         print(f'study best value: {self.best_value}')
 
+        # Run engine vs engine match.
+        terminate_match, result = False, ''
+
         # Create command line for the engine match using cutechess-cli or duel.py.
-        # Todo: Refactor this section.
-        if self.match_manager == 'cutechess':
-            tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
-        else:
-            tour_manager = f'python -u ./tourney_manager/duel/duel.py'
-
-        command = f' -concurrency {self.concurrency}'
-
-        if self.match_manager == 'cutechess':
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
-        else:
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
-
-        if self.variant != 'normal':
-            command += f' -variant {self.variant}'
-
-        command += ' -tournament round-robin'
-
-        if self.match_manager == 'cutechess':
-            command += f' -rounds {self.rounds} -games 2 -repeat 2'
-            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
-        else:
-            command += f' -rounds {self.rounds*2} -repeat 2'
-            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
-
-        if self.match_manager == 'cutechess':
-            command += f' -openings file={self.opening_file} format=epd'
-            command += ' -resign movecount=6 score=700 twosided=true'
-            command += ' -draw movenumber=30 movecount=6 score=5'
-        else:
-            command += f' -openings file={self.opening_file}'
-
-        command += f' -pgnout {self.pgnout}'
-
-        terminate_match, result = False, ""
+        tour_manager, command = self.get_match_commands(test_options, base_options)
 
         # Execute the command line to start the match.
         process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
@@ -208,6 +213,10 @@ class Objective(object):
                 else:
                     if 'Finished match' in line:
                         break
+
+        if result == '':
+            print('Error, there is something wrong with the engine match.')
+            raise
 
         # Prune trials that are not promising. If number of games
         # per trial is 100 and after 50 games, its result is below 0.45 or 45%
