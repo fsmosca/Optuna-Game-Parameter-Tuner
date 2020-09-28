@@ -149,6 +149,9 @@ python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 
   * TC: 10s+100ms
   * Note: Base engine parameter values are fixed.
   * link: [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
+* Optimization 4
+  * Note: A fix depth 4 tuning with threshold pruner
+  * link: [Trial threshold pruner](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/eb595ecb7a752cf2db6d8752b7480c59f696c7b7#commitcomment-42769655)
 
 ## Credits
 * Optuna  
