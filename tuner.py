@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.10.3'
+__version__ = 'v0.11.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -21,6 +21,7 @@ from collections import OrderedDict
 import argparse
 from pathlib import Path
 import ast
+from typing import List
 
 import optuna
 
@@ -44,7 +45,8 @@ class Objective(object):
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, threshold_pruner_name='',
                  threshold_pruner_result=0.45,
-                 threshold_pruner_games=16, games_per_trial=32):
+                 threshold_pruner_games=16, threshold_pruner_interval=1,
+                 games_per_trial=32):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -87,6 +89,7 @@ class Objective(object):
         self.threshold_pruner_name = threshold_pruner_name
         self.threshold_pruner_result = threshold_pruner_result
         self.threshold_pruner_games = threshold_pruner_games
+        self.threshold_pruner_interval = threshold_pruner_interval
 
         # Adjust depth for duel.py since its default depth is 0.
         if self.match_manager == 'duel' and self.depth == DEFAULT_SEARCH_DEPTH:
@@ -120,7 +123,7 @@ class Objective(object):
 
         return new_param
 
-    def get_match_commands(self, test_options, base_options):
+    def get_match_commands(self, test_options, base_options, games):
         if self.match_manager == 'cutechess':
             tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
         else:
@@ -141,14 +144,14 @@ class Objective(object):
         command += ' -tournament round-robin'
 
         if self.match_manager == 'cutechess':
-            command += f' -rounds {self.rounds} -games 2 -repeat 2'
+            command += f' -rounds {games//2} -games 2 -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
         else:
-            command += f' -rounds {self.rounds*2} -repeat 2'
+            command += f' -rounds {games} -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if self.match_manager == 'cutechess':
-            command += f' -openings file={self.opening_file} format=epd'
+            command += f' -openings file={self.opening_file} order=random format=epd'
             command += ' -resign movecount=6 score=700 twosided=true'
             command += ' -draw movenumber=30 movecount=6 score=5'
         else:
@@ -157,6 +160,30 @@ class Objective(object):
         command += f' -pgnout {self.pgnout}'
 
         return tour_manager, command
+
+    def engine_match(self, test_options, base_options, games=50) -> float:
+        result = ''
+
+        tour_manager, command = self.get_match_commands(
+            test_options, base_options, games)
+
+        # Execute the command line to start the match.
+        process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
+        for eline in iter(process.stdout.readline, ''):
+            line = eline.strip()
+            if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
+                result, _ = self.read_result(line)
+                if 'Finished match' in line:
+                    break
+
+        if result == '':
+            raise Exception('Error, there is something wrong with the engine match.')
+
+        return result
+
+    @staticmethod
+    def result_mean(data: List[float]) -> float:
+        return sum(data)/len(data)
 
     def __call__(self, trial):
         print()
@@ -187,67 +214,54 @@ class Objective(object):
         # Log info to console.
         print(f'suggested param for test engine: {self.test_param}')
         if self.fix_base_param:
-            print(f'param for base engine          : {self.init_param}')
+            print(f'param for base engine          : {self.init_param}\n')
         else:
             if self.best_value > self.init_value:
-                print(f'param for base engine          : {self.best_param}')
+                print(f'param for base engine          : {self.best_param}\n')
             else:
-                print(f'param for base engine          : {self.init_param}')
+                print(f'param for base engine          : {self.init_param}\n')
 
         print(f'init param: {self.init_param}')
         print(f'init value: {self.init_value}')
         print(f'study best param: {self.best_param}')
-        print(f'study best value: {self.best_value}')
+        print(f'study best value: {self.best_value}\n')
 
         # Run engine vs engine match.
-        terminate_match, result = False, ''
+        if (self.threshold_pruner_name != ''
+                and self.trial_num > self.startup_trials):
+            games_to_play = self.threshold_pruner_games
+            result, played_games, final_result, interval = 0.0, 0, [], 1
 
-        # Create command line for engine match using cutechess-cli or duel.py.
-        tour_manager, command = self.get_match_commands(test_options,
-                                                        base_options)
+            while True:
+                print(f'games_to_play: {games_to_play}')
+                cur_result = self.engine_match(test_options, base_options, games_to_play)
 
-        # Execute the command line to start the match.
-        process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
-        for eline in iter(process.stdout.readline, ''):
-            line = eline.strip()
-            if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result, done_num_games = self.read_result(line)
+                played_games += games_to_play
+                final_result.append(cur_result)
+                result = Objective.result_mean(final_result)
+                print(f'played_games: {played_games}, result: {{intermediate: {cur_result}, average: {result}}}')
 
-                # Check if we will prune this trial.
-                if (self.threshold_pruner_name != ''
-                        and self.trial_num > self.startup_trials
-                        and done_num_games > self.threshold_pruner_games
-                        and result < self.threshold_pruner_result
-                        and self.match_manager == 'cutechess'):
-                    process.terminate()
+                trial.report(result, played_games)
 
-                    while True:
-                        process.wait(timeout=1)
-                        if process.poll() is not None:
-                            break
+                if trial.should_prune():
+                    self.trial_num += 1
+                    print(f'status: pruned, trial: {self.trial_num},'
+                          f' played_games: {played_games},'
+                          f' total_games: {self.games_per_trial},'
+                          f' current_result: {result}')
+                    raise optuna.TrialPruned()
 
-                    terminate_match = True
+                if played_games >= self.games_per_trial:
                     break
-                else:
-                    if 'Finished match' in line:
-                        break
 
-        if result == '':
-            print('Error, there is something wrong with the engine match.')
-            raise
+                games_to_play = min(
+                    self.games_per_trial - played_games,
+                    self.threshold_pruner_games * self.threshold_pruner_interval
+                )
 
-        # Prune trials that are not promising. If number of games
-        # per trial is 100 and after 50 games, its result is below 0.45 or 45%
-        # then we stop this trial. Get new param values and start a new trial.
-        trial.report(result, done_num_games)
-        if terminate_match:
-            if trial.should_prune():
-                self.trial_num += 1
-                print(f'status: pruned, trial: {self.trial_num},'
-                      f' done_games: {done_num_games},'
-                      f' total_games: {self.games_per_trial},'
-                      f' current_result: {result}')
-                raise optuna.TrialPruned()
+            result = Objective.result_mean(final_result)
+        else:
+            result = self.engine_match(test_options, base_options, self.games_per_trial)
 
         print(f'Actual match result: {result}, point of view: optimizer suggested values')
 
@@ -407,13 +421,13 @@ def main():
                              ' trials, default=None.\n'
                              'Example:\n'
                              'tuner.py --trial-pruning name=threshold_pruner'
-                             ' result=0.45 games=50 ...\n'
+                             ' result=0.45 games=50 interval=1 ...\n'
                              'Assuming games per trial is 100, after 50 games, check\n'
                              'the score of the match, if this is below 0.45, then\n'
                              'prune the trial or stop the engine match. Get new param\n'
                              'from optimizer and start a new trial.\n'
                              'Default values:\n'
-                             'result=0.45, games=games_per_trial/2\n'
+                             'result=0.45, games=games_per_trial/2, interval=1\n'
                              'Example:\n'
                              'tuner.py --trial-pruning name=threshold_pruner ...',
                         default=None)
@@ -460,7 +474,7 @@ def main():
     study_name = args.study_name
     storage_file = f'{study_name}.db'
 
-    print(f'trials: {trials}, games_per_trial: {rounds * 2}')
+    print(f'trials: {trials}, games_per_trial: {rounds * 2}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
     input_param = ast.literal_eval(args.input_param)
@@ -497,6 +511,7 @@ def main():
     tp_name = ''
     tp_result = 0.45  # Prune if result is below this.
     tp_games = games_per_trial // 2  # Prune if played games is above this.
+    tp_interval = 1
 
     if args.trial_pruning is not None:
         for opt in args.trial_pruning:
@@ -507,10 +522,13 @@ def main():
                     tp_result = float(value.split('=')[1])
                 elif 'games=' in value:
                     tp_games = int(value.split('=')[1])
+                elif 'interval=' in value:
+                    tp_interval = int(value.split('=')[1])
         if tp_name == 'threshold_pruner':
-            print(f'name: {tp_name}, result: {tp_result}, games: {tp_games}')
+            print(f'pruner name: {tp_name}, result: {tp_result}, games: {tp_games}, interval: {tp_interval}\n')
             pruner = optuna.pruners.ThresholdPruner(
-                lower=tp_result, n_warmup_steps=tp_games, interval_steps=1)
+                lower=tp_result, n_warmup_steps=tp_games,
+                interval_steps=tp_interval)
         else:
             pruner = None
     else:
@@ -566,7 +584,7 @@ def main():
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
                                  match_manager, good_result_cnt, args.depth,
-                                 tp_name, tp_result, tp_games,
+                                 tp_name, tp_result, tp_games, tp_interval,
                                  games_per_trial),
                        n_trials=n_trials)
 
