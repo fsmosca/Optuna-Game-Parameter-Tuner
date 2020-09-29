@@ -148,7 +148,7 @@ def turn(fen):
     return False
 
 
-def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
+def save_game(outfn, fen, moves, scores, depths, e1, e2, start_turn, gres,
               termination='', variant=''):
     logging.info('Saving game ...')
     with open(outfn, 'a') as f:
@@ -167,7 +167,7 @@ def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
         else:
             f.write('\n')
 
-        for i, (m, s) in enumerate(zip(moves, scores)):
+        for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
             num = i + 1
             if num % 2 == 0:
                 if start_turn:
@@ -180,7 +180,7 @@ def save_game(outfn, fen, moves, scores, e1, e2, start_turn, gres,
                     str_num = f'{num // 2}. '
                 else:
                     str_num = f'{num // 2}... '
-            f.write(f'{str_num}{m} {{{s}}} ')
+            f.write(f'{str_num}{m} {{{s}/{d}}} ')
             if (i + 1) % 5 == 0:
                 f.write('\n')
         f.write('\n\n')
@@ -435,7 +435,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
                     break
 
         num, side, move, line, game_end = 0, 0, None, '', False
-        score_history, elapse_history = [], []
+        score_history, elapse_history, depth_history = [], [], []
         start_turn = turn(fen) if not isinstance(fen, int) else True
         gres, e1score = '*', 0.0
         is_time_over = [False, False]
@@ -472,7 +472,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
                     logging.debug(f'{eng[side]["name"]} > go')
 
             num += 1
-            score = None
+            score, depth = None, None
 
             for eline in iter(eng[side]['proc'].stdout.readline, ''):
                 line = eline.strip()
@@ -483,9 +483,10 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
                     if not line.startswith('#'):
                         print(line)
 
-                # Save score from engine search info.
+                # Save score and depth from engine search info.
                 if line.split()[0].isdigit():
                     score = int(line.split()[1])  # cp
+                    depth = int(line.split()[0])
 
                 # Check end of game as claimed by engines.
                 game_endr, gresr, e1scorer, termi = is_game_end(line, test_engine_color)
@@ -500,6 +501,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
 
                     move = line.split('move ')[1]
                     score_history.append(score if score is not None else 0)
+                    depth_history.append(depth if depth is not None else 0)
 
                     if timer[side].is_zero_time():
                         is_time_over[current_color] = True
@@ -547,8 +549,8 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
 
         if output_game_file is not None:
             save_game(output_game_file, fen, move_hist, score_history,
-                      eng[0]["name"], eng[1]["name"], start_turn, gres,
-                      termination, variant)
+                      depth_history, eng[0]["name"], eng[1]["name"],
+                      start_turn, gres, termination, variant)
 
         for i, e in enumerate(eng):
             e['proc'].stdin.write('quit\n')
