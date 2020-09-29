@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.10.2'
+__version__ = 'v0.10.3'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -32,6 +32,9 @@ except ModuleNotFoundError:
     print('Warning! pandas is not installed.')
 
 
+DEFAULT_SEARCH_DEPTH = 1000
+
+
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_value,
                  init_param, init_value, variant, opening_file,
@@ -39,7 +42,7 @@ class Objective(object):
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
-                 depth=1000, threshold_pruner_name='',
+                 depth=DEFAULT_SEARCH_DEPTH, threshold_pruner_name='',
                  threshold_pruner_result=0.45,
                  threshold_pruner_games=16, games_per_trial=32):
         self.input_param = copy.deepcopy(input_param)
@@ -85,6 +88,10 @@ class Objective(object):
         self.threshold_pruner_result = threshold_pruner_result
         self.threshold_pruner_games = threshold_pruner_games
 
+        # Adjust depth for duel.py since its default depth is 0.
+        if self.match_manager == 'duel' and self.depth == DEFAULT_SEARCH_DEPTH:
+            self.depth = 0
+
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
         match_man = self.match_manager
@@ -125,8 +132,8 @@ class Objective(object):
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
         else:
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} depth={self.depth}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} depth={self.depth}'
 
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
