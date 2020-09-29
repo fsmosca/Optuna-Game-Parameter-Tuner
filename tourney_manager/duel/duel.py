@@ -50,8 +50,8 @@ def define_engine(engine_option_value):
     Define engine files, name and options.
     """
     ed1, ed2 = {}, {}
-    e1 = {'proc': None, 'cmd': None, 'name': 'test', 'opt': ed1, 'tc': ''}
-    e2 = {'proc': None, 'cmd': None, 'name': 'base', 'opt': ed2, 'tc': ''}
+    e1 = {'proc': None, 'cmd': None, 'name': 'test', 'opt': ed1, 'tc': '', 'depth': 0}
+    e2 = {'proc': None, 'cmd': None, 'name': 'base', 'opt': ed2, 'tc': '', 'depth': 0}
     for i, eng_opt_val in enumerate(engine_option_value):
         for value in eng_opt_val:
             if i == 0:
@@ -64,10 +64,12 @@ def define_engine(engine_option_value):
                     optv = int(value.split('option.')[1].split('=')[1])
                     ed1.update({optn: optv})
                     e1.update({'opt': ed1})
-                elif 'tc' in value:
+                elif 'tc=' in value:
                     e1.update({'tc': value.split('=')[1]})
-                elif 'name' in value:
+                elif 'name=' in value:
                     e1.update({'name': value.split('=')[1]})
+                elif 'depth=' in value:
+                    e1.update({'depth': int(value.split('=')[1])})
             elif i == 1:
                 if 'cmd=' in value:
                     e2.update({'cmd': value.split('=')[1]})
@@ -76,10 +78,12 @@ def define_engine(engine_option_value):
                     optv = int(value.split('option.')[1].split('=')[1])
                     ed2.update({optn: optv})
                     e2.update({'opt': ed2})
-                elif 'tc' in value:
+                elif 'tc=' in value:
                     e2.update({'tc': value.split('=')[1]})
-                elif 'name' in value:
+                elif 'name=' in value:
                     e2.update({'name': value.split('=')[1]})
+                elif 'depth=' in value:
+                    e2.update({'depth': int(value.split('=')[1])})
 
     return e1, e2
 
@@ -110,6 +114,9 @@ def get_tc(tcd):
     tc=0/0:5+0.1 or 0:5+0.1, blitz 0m + 5s + 0.1s inc
     """
     base_minv, base_secv, inc_secv = 0, 0, 0.0
+
+    if tcd == '':
+        return base_minv, base_secv, inc_secv
 
     # Check base time with minv:secv format.
     if '/' in tcd:
@@ -375,7 +382,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
                 e.stdin.write(f'option {k}={v}\n')
                 logging.debug(f'{pn} > option {k}={v}')
 
-        timer = []
+        timer, depth_control = [], []
         for i, pr in enumerate(eng):
             e = pr['proc']
             pn = pr['name']
@@ -411,6 +418,8 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
             # Setup Timer, convert base time to ms and inc in sec to ms
             timer.append(Timer(all_base_sec * 1000, int(incv * 1000)))
 
+            depth_control.append(pr['depth'])
+
             e.stdin.write('force\n')
             logging.debug(f'{pn} > force')
 
@@ -437,12 +446,15 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
 
         # Start the game.
         while True:
-            assert timer[side].rem_cs() > 0
-            eng[side]['proc'].stdin.write(f'time {timer[side].rem_cs()}\n')
-            logging.debug(f'{eng[side]["name"]} > time {timer[side].rem_cs()}')
+            if depth_control[side] > 0:
+                eng[side]['proc'].stdin.write(f'sd {depth_control[side]}\n')
+                logging.debug(f'{eng[side]["name"]} > sd {depth_control[side]}')
+            else:
+                eng[side]['proc'].stdin.write(f'time {timer[side].rem_cs()}\n')
+                logging.debug(f'{eng[side]["name"]} > time {timer[side].rem_cs()}')
 
-            eng[side]['proc'].stdin.write(f'otim {timer[not side].rem_cs()}\n')
-            logging.debug(f'{eng[side]["name"]} > otim {timer[not side].rem_cs()}')
+                eng[side]['proc'].stdin.write(f'otim {timer[not side].rem_cs()}\n')
+                logging.debug(f'{eng[side]["name"]} > otim {timer[not side].rem_cs()}')
 
             t1 = time.perf_counter_ns()
 
@@ -523,11 +535,12 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
                     break
 
             # Time is over
-            game_endr, gresr, e1scorer = time_forfeit(
-                is_time_over[current_color], current_color, test_engine_color)
-            if game_endr:
-                gres, e1score = gresr, e1scorer
-                break
+            if depth_control[side] == 0:
+                game_endr, gresr, e1scorer = time_forfeit(
+                    is_time_over[current_color], current_color, test_engine_color)
+                if game_endr:
+                    gres, e1score = gresr, e1scorer
+                    break
 
             side = not side
             current_color = not current_color
@@ -622,13 +635,14 @@ def main():
         return
 
     each_engine_option = {}
-    for opt in args.each:
-        for value in opt:
-            key = value.split('=')[0]
-            val = value.split('=')[1].strip()
-            each_engine_option.update({key: val})
+    if args.each is not None:
+        for opt in args.each:
+            for value in opt:
+                key = value.split('=')[0]
+                val = value.split('=')[1].strip()
+                each_engine_option.update({key: val})
 
-    # Exit if tc or time control is not defined.
+    # Update tc of e1/e2 from each.
     if e1['tc'] == '' or e2['tc'] == '':
         if 'tc' in each_engine_option:
             for key, val in each_engine_option.items():
@@ -636,9 +650,20 @@ def main():
                     e1.update({key: val})
                     e2.update({key: val})
                     break
-        else:
-            print('Error, tc or time control is not properly defined!')
-            return
+
+    # Update depth of e1/e2 from each.
+    if e1['depth'] == 0 or e2['depth'] == 0:
+        if 'depth' in each_engine_option:
+            for key, val in each_engine_option.items():
+                if key == 'depth':
+                    e1.update({key: int(val)})
+                    e2.update({key: int(val)})
+                    break
+
+    # Exit if there are no tc or depth.
+    if e1['tc'] == '' or e2['tc'] == '':
+        if e1['depth'] == 0 or e2['depth'] == 0:
+            raise Exception('Error! tc or depth are not defined.')
 
     # Start opening file
     fen_file = None
