@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.11.1'
+__version__ = 'v0.11.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -108,12 +108,11 @@ class Objective(object):
         elif match_man == 'duel':
             # Score of e1 vs e2: [0.4575] 20
             result = float(line.split('[')[1].split(']')[0])
-            num_games = int(line.split('] ')[1].strip())
         else:
             print(f'Error, match_manager {match_man} is not supported.')
             raise
 
-        return result, num_games
+        return result
 
     @staticmethod
     def set_param(from_param):
@@ -172,7 +171,7 @@ class Objective(object):
         for eline in iter(process.stdout.readline, ''):
             line = eline.strip()
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result, _ = self.read_result(line)
+                result = self.read_result(line)
                 if 'Finished match' in line:
                     break
 
