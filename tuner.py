@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.12.0'
+__version__ = 'v0.13.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -407,7 +407,7 @@ def main():
                         default='uci')
     parser.add_argument('--sampler', required=False, type=str,
                         help='The sampler to be used in the study,'
-                             ' default=tpe, can be tpe or cmaes.',
+                             ' default=tpe, can be tpe or cmaes or skopt.',
                         default='tpe')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
@@ -494,6 +494,9 @@ def main():
     elif args_sampler == 'cmaes':
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
         sampler = optuna.samplers.CmaEsSampler()
+    elif args_sampler == 'skopt':
+        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
+        sampler = optuna.integration.SkoptSampler()
     else:
         msg = f'The sampler {args_sampler} is not suppored. Use tpe or cmaes.'
         raise ValueError(msg)
