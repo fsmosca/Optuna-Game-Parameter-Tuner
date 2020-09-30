@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.11.2'
+__version__ = 'v0.12.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -43,10 +43,8 @@ class Objective(object):
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
-                 depth=DEFAULT_SEARCH_DEPTH, threshold_pruner_name='',
-                 threshold_pruner_result=0.45,
-                 threshold_pruner_games=16, threshold_pruner_interval=1,
-                 games_per_trial=32):
+                 depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
+                 threshold_pruner = {}):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -86,10 +84,7 @@ class Objective(object):
         self.games_per_trial = games_per_trial
 
         self.startup_trials = 10
-        self.threshold_pruner_name = threshold_pruner_name
-        self.threshold_pruner_result = threshold_pruner_result
-        self.threshold_pruner_games = threshold_pruner_games
-        self.threshold_pruner_interval = threshold_pruner_interval
+        self.threshold_pruner = copy.deepcopy(threshold_pruner)
 
         # Adjust depth for duel.py since its default depth is 0.
         if self.match_manager == 'duel' and self.depth == DEFAULT_SEARCH_DEPTH:
@@ -226,9 +221,9 @@ class Objective(object):
         print(f'study best value: {self.best_value}\n')
 
         # Run engine vs engine match.
-        if (self.threshold_pruner_name != ''
+        if (len(self.threshold_pruner)
                 and self.trial_num > self.startup_trials):
-            games_to_play = self.threshold_pruner_games
+            games_to_play = self.threshold_pruner['games']
             result, played_games, final_result = 0.0, 0, []
 
             while True:
@@ -255,7 +250,7 @@ class Objective(object):
 
                 games_to_play = min(
                     self.games_per_trial - played_games,
-                    self.threshold_pruner_games * self.threshold_pruner_interval
+                    self.threshold_pruner['games'] * self.threshold_pruner['interval']
                 )
 
             result = Objective.result_mean(final_result)
@@ -414,13 +409,12 @@ def main():
                         help='The sampler to be used in the study,'
                              ' default=tpe, can be tpe or cmaes.',
                         default='tpe')
-    parser.add_argument('--trial-pruning', required=False, nargs='*', action='append',
-                        metavar=('name=', 'result='),
+    parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
+                        metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
-                             ' trials, default=None.\n'
+                             ' trials.\n'
                              'Example:\n'
-                             'tuner.py --trial-pruning name=threshold_pruner'
-                             ' result=0.45 games=50 interval=1 ...\n'
+                             'tuner.py --threshold-pruner result=0.45 games=50 interval=1 ...\n'
                              'Assuming games per trial is 100, after 50 games, check\n'
                              'the score of the match, if this is below 0.45, then\n'
                              'prune the trial or stop the engine match. Get new param\n'
@@ -428,7 +422,7 @@ def main():
                              'Default values:\n'
                              'result=0.45, games=games_per_trial/2, interval=1\n'
                              'Example:\n'
-                             'tuner.py --trial-pruning name=threshold_pruner ...',
+                             'tuner.py --threshold-pruner ...',
                         default=None)
     parser.add_argument('--tpe-ei-samples', required=False, type=int,
                         help='The number of candidate samples used'
@@ -504,34 +498,27 @@ def main():
         msg = f'The sampler {args_sampler} is not suppored. Use tpe or cmaes.'
         raise ValueError(msg)
 
-    # Trial Pruner, if after half of games in a trial the result is below
-    # 0.45, prune the trial. Take new param values from optimizer and start
-    # a new trial.
-    tp_name = ''
-    tp_result = 0.45  # Prune if result is below this.
-    tp_games = games_per_trial // 2  # Prune if played games is above this.
-    tp_interval = 1
-
-    if args.trial_pruning is not None:
-        for opt in args.trial_pruning:
+    # ThresholdPruner as trial pruner, if result of a match is below result
+    # threshold after some games, prune the trial.
+    pruner, th_pruner = None, {}
+    if args.threshold_pruner is not None:
+        th_pruner.update({'result': 0.45, 'games': games_per_trial // 2, 'interval': 1})
+        for opt in args.threshold_pruner:
             for value in opt:
                 if 'name=' in value:
-                    tp_name = value.split('=')[1]
+                    th_pruner.update({value.split('=')[0]: value.split('=')[1]})
                 elif 'result=' in value:
-                    tp_result = float(value.split('=')[1])
+                    th_pruner.update({value.split('=')[0]: float(value.split('=')[1])})
                 elif 'games=' in value:
-                    tp_games = int(value.split('=')[1])
+                    th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
                 elif 'interval=' in value:
-                    tp_interval = int(value.split('=')[1])
-        if tp_name == 'threshold_pruner':
-            print(f'pruner name: {tp_name}, result: {tp_result}, games: {tp_games}, interval: {tp_interval}\n')
-            pruner = optuna.pruners.ThresholdPruner(
-                lower=tp_result, n_warmup_steps=tp_games,
-                interval_steps=tp_interval)
-        else:
-            pruner = None
-    else:
-        pruner = args.trial_pruning
+                    th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
+        print(f'pruner name: threshold_pruner,'
+              f' result: {th_pruner["result"]}, games: {th_pruner["games"]},'
+              f' interval: {th_pruner["interval"]}\n')
+        pruner = optuna.pruners.ThresholdPruner(
+            lower=th_pruner["result"], n_warmup_steps=th_pruner["games"],
+            interval_steps=th_pruner["interval"])
 
     while cycle < max_cycle:
         cycle += 1
@@ -583,8 +570,7 @@ def main():
                                  inc_time_sec, rounds, args.concurrency,
                                  proto, args.hash, fix_base_param,
                                  match_manager, good_result_cnt, args.depth,
-                                 tp_name, tp_result, tp_games, tp_interval,
-                                 games_per_trial),
+                                 games_per_trial, th_pruner),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
