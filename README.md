@@ -28,6 +28,9 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 #### Save studies to pandas dataframe and csv file
 * pip install pandas
 
+#### To use skopt sampler
+* pip install scikit-optimize
+
 #### Install all dependencies
 Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
 * pip install -r requirements.txt
