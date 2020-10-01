@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.16.0'
+__version__ = 'v0.16.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -508,11 +508,6 @@ def main():
                              'Example:\n'
                              'tuner.py --threshold-pruner ...',
                         default=None)
-    parser.add_argument('--tpe-ei-samples', required=False, type=int,
-                        help='The number of candidate samples used'
-                             ' to calculate ei or expected improvement,'
-                             ' default=24.',
-                        default=24)
     parser.add_argument('--input-param', required=True, type=str,
                         help='The parameters that will be optimized.\n'
                              'Example 1 with 1 parameter:\n'
