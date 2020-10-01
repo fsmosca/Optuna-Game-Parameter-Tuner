@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.13.1'
+__version__ = 'v0.13.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -405,9 +405,10 @@ def main():
                         help='The protocol that the engine supports, can be'
                              ' uci or cecp, default=uci.',
                         default='uci')
-    parser.add_argument('--sampler', required=False, type=str,
-                        help='The sampler to be used in the study,'
-                             ' default=tpe, can be tpe or cmaes or skopt.',
+    parser.add_argument('--sampler', required=False, type=str.lower,
+                        choices=['tpe', 'cmaes', 'skopt'],
+                        help='The sampler to be used in the study.'
+                             ' default=tpe.',
                         default='tpe')
     parser.add_argument('--direction', choices=['maximize', 'minimize'],
                         type=str.lower, default='maximize',
@@ -503,8 +504,7 @@ def main():
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
         sampler = optuna.integration.SkoptSampler()
     else:
-        msg = f'The sampler {args_sampler} is not suppored. Use tpe or cmaes.'
-        raise ValueError(msg)
+        raise
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after some games, prune the trial.
