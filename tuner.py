@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.13.3'
+__version__ = 'v0.14.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -22,15 +22,28 @@ import argparse
 from pathlib import Path
 import ast
 from typing import List
+import logging
 
 import optuna
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.FileHandler('log_tuner.txt', mode='a'))
+optuna.logging.enable_propagation()
+optuna.logging.set_verbosity(optuna.logging.DEBUG)
+
+chandler = logging.StreamHandler(sys.stdout)
+chandler.setLevel(logging.INFO)
+logger.addHandler(chandler)
+
 
 is_panda_ok = True
 try:
     import pandas
 except ModuleNotFoundError:
     is_panda_ok = False
-    print('Warning! pandas is not installed.')
+    logger.info('Warning! pandas is not installed.')
 
 
 DEFAULT_SEARCH_DEPTH = 1000
@@ -104,7 +117,7 @@ class Objective(object):
             # Score of e1 vs e2: [0.4575] 20
             result = float(line.split('[')[1].split(']')[0])
         else:
-            print(f'Error, match_manager {match_man} is not supported.')
+            logger.exception(f'Error, match_manager {match_man} is not supported.')
             raise
 
         return result
@@ -196,7 +209,7 @@ class Objective(object):
                     elif 'interval=' in value:
                         th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
 
-            print(f'pruner name: threshold_pruner,'
+            logger.info(f'pruner name: threshold_pruner,'
                   f' result: {th_pruner["result"]}, games: {th_pruner["games"]},'
                   f' interval: {th_pruner["interval"]}\n')
 
@@ -207,8 +220,8 @@ class Objective(object):
         return pruner, th_pruner
 
     def __call__(self, trial):
-        print()
-        print(f'starting trial: {self.trial_num} ...')
+        logger.info('')
+        logger.info(f'starting trial: {self.trial_num} ...')
 
         # Options for test engine.
         test_options = ''
@@ -233,19 +246,19 @@ class Objective(object):
         base_options.rstrip()
 
         # Log info to console.
-        print(f'suggested param for test engine: {self.test_param}')
+        logger.info(f'suggested param for test engine: {self.test_param}')
         if self.fix_base_param:
-            print(f'param for base engine          : {self.init_param}\n')
+            logger.info(f'param for base engine          : {self.init_param}\n')
         else:
             if self.best_value > self.init_value:
-                print(f'param for base engine          : {self.best_param}\n')
+                logger.info(f'param for base engine          : {self.best_param}\n')
             else:
-                print(f'param for base engine          : {self.init_param}\n')
+                logger.info(f'param for base engine          : {self.init_param}\n')
 
-        print(f'init param: {self.init_param}')
-        print(f'init value: {self.init_value}')
-        print(f'study best param: {self.best_param}')
-        print(f'study best value: {self.best_value}\n')
+        logger.info(f'init param: {self.init_param}')
+        logger.info(f'init value: {self.init_value}')
+        logger.info(f'study best param: {self.best_param}')
+        logger.info(f'study best value: {self.best_value}\n')
 
         # Run engine vs engine match.
         if (len(self.threshold_pruner)
@@ -254,18 +267,18 @@ class Objective(object):
             result, played_games, final_result = 0.0, 0, []
 
             while True:
-                print(f'games_to_play: {games_to_play}')
+                logger.info(f'games_to_play: {games_to_play}')
                 cur_result = self.engine_match(test_options, base_options, games_to_play)
 
                 played_games += games_to_play
                 final_result.append(cur_result)
                 result = Objective.result_mean(final_result)
-                print(f'played_games: {played_games}, result: {{intermediate: {cur_result}, average: {result}}}')
+                logger.info(f'played_games: {played_games}, result: {{intermediate: {cur_result}, average: {result}}}')
 
                 trial.report(result, played_games)
 
                 if trial.should_prune():
-                    print(f'status: pruned, trial: {self.trial_num},'
+                    logger.info(f'status: pruned, trial: {self.trial_num},'
                           f' played_games: {played_games},'
                           f' total_games: {self.games_per_trial},'
                           f' current_result: {result}')
@@ -284,7 +297,7 @@ class Objective(object):
         else:
             result = self.engine_match(test_options, base_options, self.games_per_trial)
 
-        print(f'Actual match result: {result}, point of view: optimizer suggested values')
+        logger.info(f'Actual match result: {result}, point of view: optimizer suggested values')
 
         # If base engine always uses the initial param or default param.
         if self.fix_base_param:
@@ -338,7 +351,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     if not is_plot:
         return
 
-    print('Saving plots ...')
+    logger.info('Saving plots ...')
 
     trials = len(study.trials)
 
@@ -362,7 +375,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     fig = optuna.visualization.plot_param_importances(study)
     fig.write_image(f'{pre_name}_importance.png')
 
-    print('Done saving plots.')
+    logger.info('Done saving plots.')
 
 
 def main():
@@ -500,13 +513,13 @@ def main():
     study_name = args.study_name
     storage_file = f'{study_name}.db'
 
-    print(f'trials: {trials}, games_per_trial: {rounds * 2}\n')
+    logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}, sampler: {args.sampler}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
     input_param = ast.literal_eval(args.input_param)
     input_param = OrderedDict(sorted(input_param.items()))
 
-    print(f'input param: {input_param}\n')
+    logger.info(f'input param: {input_param}\n')
     init_param = Objective.set_param(input_param)
 
     # Adjust save_plots_every_trial if trials is lower than it so
@@ -539,6 +552,8 @@ def main():
     # --threshold-pruner result=0.45 games=50 --games-per-trial 100 ...
     pruner, th_pruner = Objective.get_pruner(args.threshold_pruner, games_per_trial)
 
+    logger.info('Starting optimization ...')
+
     while cycle < max_cycle:
         cycle += 1
 
@@ -555,21 +570,21 @@ def main():
             best_value = study.best_value
             is_study = True
         except ValueError:
-            print('Warning, best value from previous trial is not found!')
+            logger.warning('Warning, best value from previous trial is not found!')
         except:
-            print('Unexpected error:', sys.exc_info()[0])
+            logger.exception('Unexpected error:', sys.exc_info()[0])
             raise
-        print(f'study best value: {best_value}')
+        logger.info(f'study best value: {best_value}')
 
         # Get the best param values from previous study session.
         try:
             best_param = copy.deepcopy(study.best_params)
         except ValueError:
-            print('Warning, best param from previous trial is not found!.')
+            logger.warning('Warning, best param from previous trial is not found!.')
         except:
-            print('Unexpected error:', sys.exc_info()[0])
+            logger.exception('Unexpected error:', sys.exc_info()[0])
             raise
-        print(f'study best param: {best_param}')
+        logger.info(f'study best param: {best_param}')
 
         old_trial_num = len(study.trials)
 
@@ -599,14 +614,14 @@ def main():
         if is_panda_ok:
             df = study.trials_dataframe(attrs=('number', 'value', 'params',
                                                'state'))
-            print(df.to_string(index=False))
+            logger.info(df.to_string(index=False))
             df.to_csv(f'{study_name}.csv', index=False)
 
         # Show the best param, value and trial number.
-        print()
-        print(f'study best param: {study.best_params}')
-        print(f'study best value: {study.best_value}')
-        print(f'study best trial number: {study.best_trial.number}')
+        logger.info('')
+        logger.info(f'study best param: {study.best_params}')
+        logger.info(f'study best value: {study.best_value}')
+        logger.info(f'study best trial number: {study.best_trial.number}')
 
 
 if __name__ == "__main__":
