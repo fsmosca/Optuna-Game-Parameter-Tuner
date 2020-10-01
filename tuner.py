@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.16.2'
+__version__ = 'v0.17.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -225,7 +225,25 @@ class Objective(object):
 
         if name == 'skopt':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
-            return optuna.integration.SkoptSampler()
+
+            # Check acquisition function, It can be:
+            # LCB, or EI, or PI or the default gp_hedge
+            # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
+            skopt_kwargs = {'acq_func': 'gp_hedge'}
+
+            for opt in args_sampler:
+                for value in opt:
+                    if 'acquisition_function=' in value:
+                        af_value: str = value.split('=')[1]
+
+                        if af_value in ['LCB', 'EI', 'PI', 'gp_hedge']:
+                            skopt_kwargs.update({'acq_func': value.split('=')[1]})
+                        else:
+                            logger.exception(f'Error! acquisition function {af_value} is not supported. Use LCB or EI or PI or gp_hedge.')
+                            raise
+                        break
+
+            return optuna.integration.SkoptSampler(skopt_kwargs=skopt_kwargs)
 
         logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
         raise
@@ -485,10 +503,14 @@ def main():
                         default='uci')
     parser.add_argument('--sampler', required=False, nargs='*', action='append',
                         metavar=('name=', 'option_name='),
-                        help='The sampler to be used in the study, default=tpe. Examples:\n'
-                             '--sampler name=tpe ei_samples=24\n'
-                             '--sampler name=cmaes\n'
-                             '--sampler name=skopt')
+                        help='The sampler to be used in the study, default name=tpe.\n'
+                             'name can be tpe or cmaes or skopt, examples:\n'
+                             '--sampler name=tpe ei_samples=50 ...\n'
+                             '  default ei_samples=24\n'
+                             '--sampler name=cmaes ...\n'
+                             '--sampler name=skopt acquisition_function=LCB ...\n'
+                             '  default acquisition_function=gp_hedge\n'
+                             '  Can be LCB or EI or PI or gp_hedge')
     parser.add_argument('--direction', choices=['maximize', 'minimize'],
                         type=str.lower, default='maximize',
                         help='The choice of whether to maximize or minimize'
