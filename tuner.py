@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.13.2'
+__version__ = 'v0.13.3'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -178,6 +178,33 @@ class Objective(object):
     @staticmethod
     def result_mean(data: List[float]) -> float:
         return sum(data)/len(data)
+
+    @staticmethod
+    def get_pruner(args_threshold_pruner, games_per_trial):
+        pruner, th_pruner = None, {}
+        if args_threshold_pruner is not None:
+
+            # Default if there is threshold pruner.
+            th_pruner.update({'result': 0.45, 'games': games_per_trial // 2, 'interval': 1})
+
+            for opt in args_threshold_pruner:
+                for value in opt:
+                    if 'result=' in value:
+                        th_pruner.update({value.split('=')[0]: float(value.split('=')[1])})
+                    elif 'games=' in value:
+                        th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
+                    elif 'interval=' in value:
+                        th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
+
+            print(f'pruner name: threshold_pruner,'
+                  f' result: {th_pruner["result"]}, games: {th_pruner["games"]},'
+                  f' interval: {th_pruner["interval"]}\n')
+
+            pruner = optuna.pruners.ThresholdPruner(
+                lower=th_pruner["result"], n_warmup_steps=th_pruner["games"],
+                interval_steps=th_pruner["interval"])
+
+        return pruner, th_pruner
 
     def __call__(self, trial):
         print()
@@ -507,26 +534,10 @@ def main():
         raise
 
     # ThresholdPruner as trial pruner, if result of a match is below result
-    # threshold after some games, prune the trial.
-    pruner, th_pruner = None, {}
-    if args.threshold_pruner is not None:
-        th_pruner.update({'result': 0.45, 'games': games_per_trial // 2, 'interval': 1})
-        for opt in args.threshold_pruner:
-            for value in opt:
-                if 'name=' in value:
-                    th_pruner.update({value.split('=')[0]: value.split('=')[1]})
-                elif 'result=' in value:
-                    th_pruner.update({value.split('=')[0]: float(value.split('=')[1])})
-                elif 'games=' in value:
-                    th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
-                elif 'interval=' in value:
-                    th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
-        print(f'pruner name: threshold_pruner,'
-              f' result: {th_pruner["result"]}, games: {th_pruner["games"]},'
-              f' interval: {th_pruner["interval"]}\n')
-        pruner = optuna.pruners.ThresholdPruner(
-            lower=th_pruner["result"], n_warmup_steps=th_pruner["games"],
-            interval_steps=th_pruner["interval"])
+    # threshold after games threshold then prune the trial. Get new param
+    # from optimizer and continue with the next trial.
+    # --threshold-pruner result=0.45 games=50 --games-per-trial 100 ...
+    pruner, th_pruner = Objective.get_pruner(args.threshold_pruner, games_per_trial)
 
     while cycle < max_cycle:
         cycle += 1
