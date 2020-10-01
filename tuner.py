@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.13.0'
+__version__ = 'v0.13.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -409,6 +409,11 @@ def main():
                         help='The sampler to be used in the study,'
                              ' default=tpe, can be tpe or cmaes or skopt.',
                         default='tpe')
+    parser.add_argument('--direction', choices=['maximize', 'minimize'],
+                        type=str.lower, default='maximize',
+                        help='The choice of whether to maximize or minimize'
+                             ' the objective value to get the desired parameter'
+                             ' values. default=maximize')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
@@ -528,7 +533,7 @@ def main():
 
         # Define study.
         study = optuna.create_study(study_name=study_name,
-                                    direction='maximize',
+                                    direction=args.direction,
                                     storage=f'sqlite:///{storage_file}',
                                     load_if_exists=True, sampler=sampler,
                                     pruner=pruner)
