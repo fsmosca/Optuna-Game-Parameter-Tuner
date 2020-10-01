@@ -51,10 +51,12 @@ It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/genera
 ## Help
 ```c++
 python tuner.py -h
-usage: Optuna Game Parameter Tuner v0.12.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
-                                           [--inc-time-sec INC_TIME_SEC] [--depth DEPTH] --opening-file OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
-                                           [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL] [--sampler SAMPLER]
-                                           [--threshold-pruner [result= [games= ...]]] [--tpe-ei-samples TPE_EI_SAMPLES] --input-param INPUT_PARAM
+usage: Optuna Game Parameter Tuner v0.13.2 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
+                                           [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] [--depth DEPTH] --opening-file
+                                           OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+                                           [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
+                                           [--sampler {tpe,cmaes,skopt}] [--direction {maximize,minimize}] [--threshold-pruner [result= [games= ...]]]
+                                           [--tpe-ei-samples TPE_EI_SAMPLES] --input-param INPUT_PARAM
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -100,7 +102,10 @@ optional arguments:
   --match-manager MATCH_MANAGER
                         The application that handles the engine match, default=cutechess.
   --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
-  --sampler SAMPLER     The sampler to be used in the study, default=tpe, can be tpe or cmaes.
+  --sampler {tpe,cmaes,skopt}
+                        The sampler to be used in the study. default=tpe.
+  --direction {maximize,minimize}
+                        The choice of whether to maximize or minimize the objective value to get the desired parameter values. default=maximize
   --threshold-pruner [result= [games= ...]]
                         A trial pruner used to prune or stop unpromising trials.
                         Example:
@@ -122,7 +127,7 @@ optional arguments:
                         Example 2 with 2 parameters:
                         --input-param "{'pawn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}, 'knight': {'default': 300, 'min': 250, 'max': 350, 'step': 2}}"
 
-Optuna Game Parameter Tuner v0.12.0
+Optuna Game Parameter Tuner v0.13.2
 ```
 
 ## Sample command line
