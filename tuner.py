@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.17.0'
+__version__ = 'v0.18.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -231,6 +231,7 @@ class Objective(object):
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
             skopt_kwargs = {'acq_func': 'gp_hedge'}
 
+            af_value = None
             for opt in args_sampler:
                 for value in opt:
                     if 'acquisition_function=' in value:
@@ -242,6 +243,31 @@ class Objective(object):
                             logger.exception(f'Error! acquisition function {af_value} is not supported. Use LCB or EI or PI or gp_hedge.')
                             raise
                         break
+
+            # Tweak exploration/exploitation.
+            # LCB ->kappa, PI or EI ->xi
+            # If kappa or xi is high, it favors exploration otherwise exploitation.
+            # high: 10000, low: 0.0001
+            # Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py
+            acq_func_kwargs = {}
+
+            if af_value == 'LCB':
+                for opt in args_sampler:
+                    for value in opt:
+                        if 'kappa=' in value:
+                            acq_func_kwargs.update({'acq_func_kwargs': {'kappa': float(value.split('=')[1])}})
+                            break
+            elif af_value == 'EI' or af_value == 'PI':
+                for opt in args_sampler:
+                    for value in opt:
+                        if 'xi=' in value:
+                            acq_func_kwargs.update({'acq_func_kwargs': {'xi': float(value.split('=')[1])}})
+                            break
+
+            if len(acq_func_kwargs) > 0:
+                skopt_kwargs.update(acq_func_kwargs)
+
+            logger.info(f'skopt_kwargs: {skopt_kwargs}')
 
             return optuna.integration.SkoptSampler(skopt_kwargs=skopt_kwargs)
 
@@ -510,7 +536,13 @@ def main():
                              '--sampler name=cmaes ...\n'
                              '--sampler name=skopt acquisition_function=LCB ...\n'
                              '  default acquisition_function=gp_hedge\n'
-                             '  Can be LCB or EI or PI or gp_hedge')
+                             '  Can be LCB or EI or PI or gp_hedge\n'
+                             '  Example to explore, with LCB and kappa, high kappa would explore, low would exploit:\n'
+                             '  --sampler name=skopt acquisition_function=LCB kappa=10000\n'
+                             '  Example to exploit, with EI or PI and xi, high xi would explore, low would exploit:\n'
+                             '  --sampler name=skopt acquisition_function=EI xi=0.0001\n'
+                             '  Note: negative xi does not work with PI, but will work with EI.\n'
+                             '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py')
     parser.add_argument('--direction', choices=['maximize', 'minimize'],
                         type=str.lower, default='maximize',
                         help='The choice of whether to maximize or minimize'
