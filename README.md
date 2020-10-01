@@ -54,12 +54,13 @@ It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/genera
 ## Help
 ```c++
 python tuner.py -h
-usage: Optuna Game Parameter Tuner v0.13.2 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY] [--games-per-trial GAMES_PER_TRIAL]
-                                           [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC] [--inc-time-sec INC_TIME_SEC] [--depth DEPTH] --opening-file
-                                           OPENING_FILE [--variant VARIANT] [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
-                                           [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER] [--protocol PROTOCOL]
-                                           [--sampler {tpe,cmaes,skopt}] [--direction {maximize,minimize}] [--threshold-pruner [result= [games= ...]]]
-                                           [--tpe-ei-samples TPE_EI_SAMPLES] --input-param INPUT_PARAM
+usage: Optuna Game Parameter Tuner v0.17.0 [-h] --engine ENGINE [--hash HASH] [--trials TRIALS] [--concurrency CONCURRENCY]
+                                           [--games-per-trial GAMES_PER_TRIAL] [--study-name STUDY_NAME] [--base-time-sec BASE_TIME_SEC]
+                                           [--inc-time-sec INC_TIME_SEC] [--depth DEPTH] --opening-file OPENING_FILE [--variant VARIANT]
+                                           [--pgn-output PGN_OUTPUT] [--plot] [--initial-best-value INITIAL_BEST_VALUE]
+                                           [--save-plots-every-trial SAVE_PLOTS_EVERY_TRIAL] [--fix-base-param] [--match-manager MATCH_MANAGER]
+                                           [--protocol PROTOCOL] [--sampler [name= [option_name= ...]]] [--direction {maximize,minimize}]
+                                           [--threshold-pruner [result= [games= ...]]] --input-param INPUT_PARAM
 
 Optimize parameter values of a game agent using optuna framework.
 
@@ -105,8 +106,15 @@ optional arguments:
   --match-manager MATCH_MANAGER
                         The application that handles the engine match, default=cutechess.
   --protocol PROTOCOL   The protocol that the engine supports, can be uci or cecp, default=uci.
-  --sampler {tpe,cmaes,skopt}
-                        The sampler to be used in the study. default=tpe.
+  --sampler [name= [option_name= ...]]
+                        The sampler to be used in the study, default name=tpe.
+                        name can be tpe or cmaes or skopt, examples:
+                        --sampler name=tpe ei_samples=50 ...
+                          default ei_samples=24
+                        --sampler name=cmaes ...
+                        --sampler name=skopt acquisition_function=LCB ...
+                          default acquisition_function=gp_hedge
+                          Can be LCB or EI or PI or gp_hedge
   --direction {maximize,minimize}
                         The choice of whether to maximize or minimize the objective value to get the desired parameter values. default=maximize
   --threshold-pruner [result= [games= ...]]
@@ -121,8 +129,6 @@ optional arguments:
                         result=0.45, games=games_per_trial/2, interval=1
                         Example:
                         tuner.py --threshold-pruner ...
-  --tpe-ei-samples TPE_EI_SAMPLES
-                        The number of candidate samples used to calculate ei or expected improvement, default=24.
   --input-param INPUT_PARAM
                         The parameters that will be optimized.
                         Example 1 with 1 parameter:
@@ -130,12 +136,12 @@ optional arguments:
                         Example 2 with 2 parameters:
                         --input-param "{'pawn': {'default': 92, 'min': 90, 'max': 120, 'step': 2}, 'knight': {'default': 300, 'min': 250, 'max': 350, 'step': 2}}"
 
-Optuna Game Parameter Tuner v0.13.2
+Optuna Game Parameter Tuner v0.17.0
 ```
 
 ## Sample command line
 ```python
-python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}, 'BishopValueEn': {'default':350, 'min':290, 'max':350, 'step':3}, 'RookValueEn': {'default':525, 'min':480, 'max':550, 'step':5}, 'QueenValueOp': {'default':985, 'min':950, 'max':1200, 'step':5}}" --initial-best-value 0.54 --games-per-trial 200 --plot --base-time-sec 120 --inc-time-sec 0.1 --depth 4 --study-name pv_d4_eisample_50_pruner --pgn-output train_pv_d4_eisamples_50_pruner.pgn --trials 200 --tpe-ei-samples 50 --threshold_pruner result=0.35
+python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}, 'BishopValueEn': {'default':350, 'min':290, 'max':350, 'step':3}, 'RookValueEn': {'default':525, 'min':480, 'max':550, 'step':5}, 'QueenValueOp': {'default':985, 'min':950, 'max':1200, 'step':5}}" --initial-best-value 0.54 --games-per-trial 200 --plot --base-time-sec 120 --inc-time-sec 0.1 --depth 4 --study-name pv_d4_eisample_50_pruner --pgn-output train_pv_d4_eisamples_50_pruner.pgn --trials 200 --threshold-pruner result=0.35 --sampler name=skopt acquisition_function=LCB
 ```
 
 
