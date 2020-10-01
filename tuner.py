@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.14.0'
+__version__ = 'v0.15.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -191,6 +191,24 @@ class Objective(object):
     @staticmethod
     def result_mean(data: List[float]) -> float:
         return sum(data)/len(data)
+
+    @staticmethod
+    def get_sampler(args_sampler, args_tpe_ei_samples):
+        if args_sampler == 'tpe':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
+            sampler = optuna.samplers.TPESampler(
+                n_ei_candidates=args_tpe_ei_samples)
+        elif args_sampler == 'cmaes':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
+            sampler = optuna.samplers.CmaEsSampler()
+        elif args_sampler == 'skopt':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
+            sampler = optuna.integration.SkoptSampler()
+        else:
+            logger.exception(f'Error, sampler {args_sampler} is not supported.')
+            raise
+
+        return sampler
 
     @staticmethod
     def get_pruner(args_threshold_pruner, games_per_trial):
@@ -533,18 +551,7 @@ def main():
     cycle = 0
 
     # Define sampler to use, default is TPE.
-    if args_sampler == 'tpe':
-        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
-        sampler = optuna.samplers.TPESampler(
-            n_ei_candidates=args.tpe_ei_samples)
-    elif args_sampler == 'cmaes':
-        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
-        sampler = optuna.samplers.CmaEsSampler()
-    elif args_sampler == 'skopt':
-        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
-        sampler = optuna.integration.SkoptSampler()
-    else:
-        raise
+    sampler = Objective.get_sampler(args_sampler, args.tpe_ei_samples)
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after games threshold then prune the trial. Get new param
