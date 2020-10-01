@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.15.0'
+__version__ = 'v0.16.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -193,22 +193,41 @@ class Objective(object):
         return sum(data)/len(data)
 
     @staticmethod
-    def get_sampler(args_sampler, args_tpe_ei_samples):
-        if args_sampler == 'tpe':
-            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
-            sampler = optuna.samplers.TPESampler(
-                n_ei_candidates=args_tpe_ei_samples)
-        elif args_sampler == 'cmaes':
-            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
-            sampler = optuna.samplers.CmaEsSampler()
-        elif args_sampler == 'skopt':
-            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
-            sampler = optuna.integration.SkoptSampler()
-        else:
-            logger.exception(f'Error, sampler {args_sampler} is not supported.')
-            raise
+    def get_sampler(args_sampler):
+        if args_sampler is None:
+            logger.warning('Sampler option is not defined, use tpe sampler.')
+            return optuna.samplers.TPESampler()
 
-        return sampler
+        name = None
+        for opt in args_sampler:
+            for value in opt:
+                if 'name=' in value:
+                    name = value.split('=')[1]
+                    break
+
+        if name is None:
+            logger.warning('Sampler name is not defined, use tpe sampler.')
+            return optuna.samplers.TPESampler()
+
+        if name == 'tpe':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
+            for opt in args_sampler:
+                for value in opt:
+                    if 'ei_samples=' in value:
+                        return optuna.samplers.TPESampler(
+                            n_ei_candidates=int(value.split('=')[1]))
+            return optuna.samplers.TPESampler()
+
+        if name == 'cmaes':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
+            return optuna.samplers.CmaEsSampler()
+
+        if name == 'skopt':
+            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
+            return optuna.integration.SkoptSampler()
+
+        logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
+        raise
 
     @staticmethod
     def get_pruner(args_threshold_pruner, games_per_trial):
@@ -463,11 +482,12 @@ def main():
                         help='The protocol that the engine supports, can be'
                              ' uci or cecp, default=uci.',
                         default='uci')
-    parser.add_argument('--sampler', required=False, type=str.lower,
-                        choices=['tpe', 'cmaes', 'skopt'],
-                        help='The sampler to be used in the study.'
-                             ' default=tpe.',
-                        default='tpe')
+    parser.add_argument('--sampler', required=False, nargs='*', action='append',
+                        metavar=('name=', 'option_name='),
+                        help='The sampler to be used in the study, default=tpe. Examples:\n'
+                             '--sampler name=tpe ei_samples=24\n'
+                             '--sampler name=cmaes\n'
+                             '--sampler name=skopt')
     parser.add_argument('--direction', choices=['maximize', 'minimize'],
                         type=str.lower, default='maximize',
                         help='The choice of whether to maximize or minimize'
@@ -512,7 +532,6 @@ def main():
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
     match_manager = args.match_manager
-    args_sampler = args.sampler
 
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
@@ -551,7 +570,7 @@ def main():
     cycle = 0
 
     # Define sampler to use, default is TPE.
-    sampler = Objective.get_sampler(args_sampler, args.tpe_ei_samples)
+    sampler = Objective.get_sampler(args.sampler)
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after games threshold then prune the trial. Get new param
