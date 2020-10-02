@@ -145,27 +145,13 @@ python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 
 ```
 
 
-## Tests
+## Optimization studies
 
-* Optimization 1
-  * Trials: 212
-  * Games per trial: 24
-  * TC: 10s+100ms
-  * Link: [Chess Piece Value Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
-* Optimization 2
-  * Trials: 200
-  * Games per trial: 24
-  * TC: 20s+100ms
-  * link: [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
-* Optimization 3
-  * Trials: 32
-  * Games per trial: 100
-  * TC: 10s+100ms
-  * Note: Base engine parameter values are fixed.
-  * link: [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
-* Optimization 4
-  * Note: A fix depth 4 tuning with threshold pruner
-  * link: [Trial threshold pruner](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/eb595ecb7a752cf2db6d8752b7480c59f696c7b7#commitcomment-42769655)
+* [Chess Piece Value Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
+* [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
+* [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
+* [Optimization with Threshold Pruner](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/eb595ecb7a752cf2db6d8752b7480c59f696c7b7#commitcomment-42769655)
+* [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/d375e21af2f7b0bccdc11f215edf960628462c86#comments)
 
 ## Credits
 * Optuna  
