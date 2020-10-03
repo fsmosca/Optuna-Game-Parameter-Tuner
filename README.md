@@ -151,7 +151,7 @@ python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 
 * [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
 * [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
 * [Optimization with Threshold Pruner](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/eb595ecb7a752cf2db6d8752b7480c59f696c7b7#commitcomment-42769655)
-* [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/d375e21af2f7b0bccdc11f215edf960628462c86#comments)
+* [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison)
 
 ## Credits
 * Optuna  
