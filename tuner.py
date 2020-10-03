@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.18.1'
+__version__ = 'v0.19.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -266,6 +266,21 @@ class Objective(object):
 
             if len(acq_func_kwargs) > 0:
                 skopt_kwargs.update(acq_func_kwargs)
+
+            # Add base_estimator options such as GP, RF, ET, GBRT, default=GP.
+            # Ref.: https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
+            for opt in args_sampler:
+                for value in opt:
+                    if 'base_estimator=' in value:
+                        be: str = value.split('=')[1]
+
+                        if be in ['GP', 'RF', 'ET', 'GBRT']:
+                            skopt_kwargs.update({'base_estimator': be})
+                        else:
+                            logger.exception(f'Error! base_estimator {be} is not supported. Use GP or RF or ET or GBRT.'
+                                             f' Or do not write base-estimator at all and it will use GP.')
+                            raise
+                        break
 
             logger.info(f'skopt_kwargs: {skopt_kwargs}')
 
@@ -549,7 +564,9 @@ def main():
                              '  Example to exploit, with EI or PI and xi, high xi would explore, low would exploit:\n'
                              '  --sampler name=skopt acquisition_function=EI xi=0.0001\n'
                              '  Note: negative xi does not work with PI, but will work with EI.\n'
-                             '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py')
+                             '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py\n'
+                             '  Instead of using GP one can also use RT or ET or GBRT:\n'
+                             '  --sampler name=skopt base_estimator=GBRT\n')
     parser.add_argument('--direction', choices=['maximize', 'minimize'],
                         type=str.lower, default='maximize',
                         help='The choice of whether to maximize or minimize'
