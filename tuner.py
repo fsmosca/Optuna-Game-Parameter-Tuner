@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.2'
+__version__ = 'v0.19.3'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -307,8 +307,9 @@ class Objective(object):
                         th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
 
             logger.info(f'pruner name: threshold_pruner,'
-                  f' result: {th_pruner["result"]}, games: {th_pruner["games"]},'
-                  f' interval: {th_pruner["interval"]}\n')
+                        f' result: {th_pruner["result"]},'
+                        f' games: {th_pruner["games"]},'
+                        f' interval: {th_pruner["interval"]}\n')
 
             pruner = optuna.pruners.ThresholdPruner(
                 lower=th_pruner["result"], n_warmup_steps=th_pruner["games"],
@@ -376,9 +377,9 @@ class Objective(object):
 
                 if trial.should_prune():
                     logger.info(f'status: pruned, trial: {self.trial_num},'
-                          f' played_games: {played_games},'
-                          f' total_games: {self.games_per_trial},'
-                          f' current_result: {result}')
+                                f' played_games: {played_games},'
+                                f' total_games: {self.games_per_trial},'
+                                f' current_result: {result}')
                     self.trial_num += 1
                     raise optuna.TrialPruned()
 
