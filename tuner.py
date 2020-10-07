@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.1'
+__version__ = 'v0.19.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -58,7 +58,7 @@ class Objective(object):
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
-                 threshold_pruner = {}):
+                 threshold_pruner={}):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
