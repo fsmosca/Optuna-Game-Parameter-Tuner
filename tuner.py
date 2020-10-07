@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.0'
+__version__ = 'v0.19.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -231,7 +231,7 @@ class Objective(object):
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
             skopt_kwargs = {'acq_func': 'gp_hedge'}
 
-            af_value = None
+            af_value = ''
             for opt in args_sampler:
                 for value in opt:
                     if 'acquisition_function=' in value:
