@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.3'
+__version__ = 'v0.19.4'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -27,14 +27,21 @@ import logging
 import optuna
 
 
+logging.basicConfig(
+    filename='log_tuner.txt',
+    filemode='a',
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)-5.5s | %(message)s'
+)
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-logger.addHandler(logging.FileHandler('log_tuner.txt', mode='a'))
 optuna.logging.enable_propagation()
 optuna.logging.disable_default_handler()
 optuna.logging.set_verbosity(optuna.logging.DEBUG)
 
 chandler = logging.StreamHandler(sys.stdout)
+chandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-5.5s | %(message)s'))
 chandler.setLevel(logging.INFO)
 logger.addHandler(chandler)
 
