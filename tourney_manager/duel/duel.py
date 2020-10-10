@@ -441,7 +441,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
         is_time_over = [False, False]
         current_color = start_turn  # True if white to move
 
-        test_engine_color = True if start_turn and gn % 2 == 0 else False
+        test_engine_color = True if ((start_turn and gn % 2 == 0) or (not start_turn and gn % 2 != 0)) else False
         termination = ''
 
         # Start the game.
