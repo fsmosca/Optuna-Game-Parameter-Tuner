@@ -162,3 +162,4 @@ https://github.com/cutechess/cutechess
 https://plotly.com/
 * Sklearn  
 https://scikit-learn.org/stable/
+* [Stockfish](https://stockfishchess.org/)
