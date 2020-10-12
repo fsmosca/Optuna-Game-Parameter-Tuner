@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.9'
+__version__ = 'v0.19.10'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -741,6 +741,12 @@ def main():
         logger.info(f'study best param: {study.best_params}')
         logger.info(f'study best value: {study.best_value}')
         logger.info(f'study best trial number: {study.best_trial.number}\n')
+
+        # Output for match manager.
+        option_output = ''
+        for k, v in study.best_params.items():
+            option_output += f'option.{k}={v} '
+        logger.info(f'{option_output}\n')
 
 
 if __name__ == "__main__":
