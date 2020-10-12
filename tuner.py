@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.4'
+__version__ = 'v0.19.5'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -487,7 +487,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     fig.update_layout(paper_bgcolor=bg)
     fig.write_image(f'{pre_name}_importance.png')
 
-    logger.info('Done saving plots.')
+    logger.info('Done saving plots.\n')
 
 
 def main():
@@ -722,14 +722,13 @@ def main():
         if is_panda_ok:
             df = study.trials_dataframe(attrs=('number', 'value', 'params',
                                                'state'))
-            logger.info(df.to_string(index=False))
+            logging.info(f'{df.to_string(index=False)}\n')
             df.to_csv(f'{study_name}.csv', index=False)
 
         # Show the best param, value and trial number.
-        logger.info('')
         logger.info(f'study best param: {study.best_params}')
         logger.info(f'study best value: {study.best_value}')
-        logger.info(f'study best trial number: {study.best_trial.number}')
+        logger.info(f'study best trial number: {study.best_trial.number}\n')
 
 
 if __name__ == "__main__":
