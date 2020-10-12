@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.5'
+__version__ = 'v0.19.6'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -218,13 +218,18 @@ class Objective(object):
             return optuna.samplers.TPESampler()
 
         if name == 'tpe':
+            ei_samples, multivariate = 24, False
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
             for opt in args_sampler:
                 for value in opt:
                     if 'ei_samples=' in value:
-                        return optuna.samplers.TPESampler(
-                            n_ei_candidates=int(value.split('=')[1]))
-            return optuna.samplers.TPESampler()
+                        ei_samples = int(value.split('=')[1])
+                        logger.info(f'tpe ei_samples={ei_samples}')
+                    elif 'multivariate=' in value:
+                        multivariate = True if value.split('=')[1].lower() == 'true' else False
+                        logger.info(f'tpe multivariate={multivariate}')
+            return optuna.samplers.TPESampler(n_ei_candidates=ei_samples,
+                                              multivariate=multivariate)
 
         if name == 'cmaes':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
@@ -563,6 +568,8 @@ def main():
                              'name can be tpe or cmaes or skopt, examples:\n'
                              '--sampler name=tpe ei_samples=50 ...\n'
                              '  default ei_samples=24\n'
+                             '--sampler name=tpe multivariate=true ...\n'
+                             '  default multivariate is false.\n'
                              '--sampler name=cmaes ...\n'
                              '--sampler name=skopt acquisition_function=LCB ...\n'
                              '  default acquisition_function=gp_hedge\n'
