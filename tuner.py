@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.6'
+__version__ = 'v0.19.7'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -729,7 +729,7 @@ def main():
         if is_panda_ok:
             df = study.trials_dataframe(attrs=('number', 'value', 'params',
                                                'state'))
-            logging.info(f'{df.to_string(index=False)}\n')
+            logger.info(f'{df.to_string(index=False)}\n')
             df.to_csv(f'{study_name}.csv', index=False)
 
         # Show the best param, value and trial number.
