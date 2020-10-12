@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.8'
+__version__ = 'v0.19.9'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -131,9 +131,13 @@ class Objective(object):
         return result
 
     @staticmethod
-    def set_param(from_param):
+    def set_param(input_param):
+        """
+        Create a dict of default values from input param
+        with default, min, max, and step.
+        """
         new_param = {}
-        for k, v in from_param.items():
+        for k, v in input_param.items():
             new_param.update({k: v['default']})
 
         return new_param
