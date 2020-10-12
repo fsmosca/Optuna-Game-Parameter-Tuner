@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.7'
+__version__ = 'v0.19.8'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -639,6 +639,7 @@ def main():
     study_name = args.study_name
     storage_file = f'{study_name}.db'
 
+    logger.info(f'{__script_name__} {__version__}')
     logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}, sampler: {args.sampler}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
