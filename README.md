@@ -14,6 +14,153 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 ## Setup
 
+### Windows 10
+* Install python 3.8 or later.  
+  * Link: https://www.python.org/downloads/
+* Create game_param_tuner folder on your c or other drive. I will use my d drive. Use your windows explorer to create a folder. It would look like this.  
+  `d:\game_param_tuner`
+* Download this repo, see at the top right.  
+  * Code->Download ZIP
+* Put the downloaded file `Optuna-Game-Parameter-Tuner-master.zip` into the `game_param_tuner` folder.  
+* Run powershell as administrator.  
+  * In the search box at lower left of window, type `powershell` and select `Run as administrator`. You should see this.  
+  `PS C:\WINDOWS\system32>`  
+* Change to `game_param_tuner` folder.  
+  `PS C:\WINDOWS\system32> cd d:\game_param_tuner`  
+* Check the contents of the current folder by typing dir.   
+  `PS D:\game_param_tuner> dir`  
+  You should see this.  
+```
+      Directory: D:\game_param_tuner
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a----        12/10/2020  11:30 pm       16287737 Optuna-Game-Parameter-Tuner-master.zip
+```
+* Unzip the file  
+  `PS D:\game_param_tuner> Expand-Archive Optuna-Game-Parameter-Tuner-master.zip .\`  
+* Type dir to see the folder `Optuna-Game-Parameter-Tuner-master`  
+  `PS D:\game_param_tuner> dir`  
+  You should see this.  
+```
+      Directory: D:\game_param_tuner
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        13/10/2020   2:05 pm                Optuna-Game-Parameter-Tuner-master
+-a----        12/10/2020  11:30 pm       16287737 Optuna-Game-Parameter-Tuner-master.zip
+```
+* Change to folder `Optuna-Game-Parameter-Tuner-master`.  
+  `PS D:\game_param_tuner> cd Optuna-Game-Parameter-Tuner-master`  
+* See the contents of current folder.  
+  `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> dir`  
+  You should see this.  
+```
+      Directory: D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        13/10/2020   2:21 pm                engines
+d-----        13/10/2020   2:21 pm                start_opening
+d-----        13/10/2020   2:21 pm                tools
+d-----        13/10/2020   2:21 pm                tourney_manager
+d-----        13/10/2020   2:21 pm                visuals
+-a----        12/10/2020   5:33 am           1865 .gitignore
+-a----        12/10/2020   5:33 am           1064 LICENSE
+-a----        12/10/2020   5:33 am          11202 README.md
+-a----        12/10/2020   5:33 am            636 requirements.txt
+-a----        12/10/2020   5:33 am          32886 tuner.py
+```
+
+* Check the version of your installed python.  
+  `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> python --version`  
+  This is what I have.  
+  `Python 3.8.5`  
+  
+* Create virtual environment on myvenv.  
+  `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> python -m venv myvenv`  
+  
+* Type dir and notice the folder myvenv.  
+  `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> dir`  
+```
+    Directory: D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        13/10/2020   2:21 pm                engines
+d-----        13/10/2020   2:33 pm                myvenv
+d-----        13/10/2020   2:21 pm                start_opening
+d-----        13/10/2020   2:21 pm                tools
+d-----        13/10/2020   2:21 pm                tourney_manager
+d-----        13/10/2020   2:21 pm                visuals
+-a----        12/10/2020   5:33 am           1865 .gitignore
+-a----        12/10/2020   5:33 am           1064 LICENSE
+-a----        12/10/2020   5:33 am          11202 README.md
+-a----        12/10/2020   5:33 am            636 requirements.txt
+-a----        12/10/2020   5:33 am          32886 tuner.py
+```
+  
+* Activate the virtual environment.  
+  * Modify the restriction first.  
+    `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> Set-ExecutionPolicy unrestricted`  
+    Then type A  
+  * Activate it.  
+  `PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> .\myvenv\scripts\activate`  
+  The prompt changes and would look like this.  
+  `(myvenv) PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master>`
+  
+* Install the requirements.  
+  `(myvenv) PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> pip install -r requirements.txt`  
+  Wait for it to finish.  
+  `(myvenv) PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master>`
+  
+This setup is done. You can now optimize a param of an engine. Lets try to optimize 2 search param of Stockfish. The `FutMargin` and `RazorMargin`.  
+
+#### Command line:  
+```
+(myvenv) PS D:\game_param_tuner\Optuna-Game-Parameter-Tuner-master> python tuner.py --engine ./engines/stockfish-modern/stockfish.exe --hash 64 --concurrency 1 --opening-file ./start_opening/ogpt_chess_startpos.epd --input-param "{'RazorMargin': {'default':527, 'min':250, 'max':650, 'step':4}, 'FutMargin': {'default':227, 'min':50, 'max':350, 'step':4}}" --plot --base-time-sec 120 --depth 4 --study-name sample --pgn-output sample.pgn --trials 100 --games-per-trial 20 --sampler name=tpe
+```  
+
+You should see something like this.  
+```
+2020-10-13 15:14:08,054 | INFO  | trials: 100, games_per_trial: 20, sampler: [['name=tpe']]
+
+2020-10-13 15:14:08,054 | INFO  | input param: OrderedDict([('FutMargin', {'default': 227, 'min': 50, 'max': 350, 'step': 4}), ('RazorMargin', {'default': 527, 'min': 250, 'max': 650, 'step': 4})])
+
+2020-10-13 15:14:08,054 | INFO  | Starting optimization ...
+2020-10-13 15:14:10,087 | INFO  | A new study created in RDB with name: sample
+2020-10-13 15:14:10,244 | WARNI | Warning, best value from previous trial is not found!
+2020-10-13 15:14:10,244 | INFO  | study best value: 0.0
+2020-10-13 15:14:10,244 | WARNI | Warning, best param from previous trial is not found!.
+2020-10-13 15:14:10,244 | INFO  | study best param: {}
+2020-10-13 15:14:10,432 | INFO  |
+2020-10-13 15:14:10,432 | INFO  | starting trial: 0 ...
+2020-10-13 15:14:10,744 | INFO  | suggested param for test engine: {'FutMargin': 110, 'RazorMargin': 634}
+2020-10-13 15:14:10,744 | INFO  | param for base engine          : {'FutMargin': 227, 'RazorMargin': 527}
+
+2020-10-13 15:14:10,744 | INFO  | init param: {'FutMargin': 227, 'RazorMargin': 527}
+2020-10-13 15:14:10,760 | INFO  | init value: 0.5
+2020-10-13 15:14:10,760 | INFO  | study best param: {}
+2020-10-13 15:14:10,760 | INFO  | study best value: 0.0
+
+2020-10-13 15:14:13,309 | INFO  | Actual match result: 0.45, point of view: optimizer suggested values
+2020-10-13 15:14:13,481 | INFO  | Trial 0 finished with value: 0.44 and parameters: {'FutMargin': 110, 'RazorMargin': 634}. Best is trial 0 with value: 0.44.
+
+...
+```
+
+#### Important options to observe
+* `--engine ./engines/stockfish-modern/stockfish.exe`, this is the location of the engine whose parameters will be optimized.  
+* `--games-per-trial 20`, number of games to play to generate an objective value.  
+* `--trials 100`, total trials to execute, the same number of objective values will be generated.  
+* `--concurrency 1`, the tuner will use 1 thread from your processor to play a game in a match of 20 games. If your processor has more threads of say 4, you can use 2 as concurrency value to make the optimization faster.
+
+### General setup guide
+
 #### Required
 * Install python 3.8 or higher
   * Visit https://www.python.org/downloads/
