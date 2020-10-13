@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.10'
+__version__ = 'v0.19.11'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -624,19 +624,11 @@ def main():
     init_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
-    match_manager = args.match_manager
 
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
     games_per_trial += 1 if (args.games_per_trial % 2) != 0 else 0
     rounds = games_per_trial//2
-
-    base_time_sec = args.base_time_sec
-    inc_time_sec = args.inc_time_sec
-    opening_file = args.opening_file
-    variant = args.variant
-    pgnout = args.pgn_output
-    proto = args.protocol
 
     good_result_cnt = 0
 
@@ -717,14 +709,15 @@ def main():
 
         # Begin param optimization.
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
-        study.optimize(Objective(args.engine, input_param,
-                                 best_param, best_value, init_param,
-                                 init_value, variant, opening_file,
-                                 old_trial_num, pgnout, base_time_sec,
-                                 inc_time_sec, rounds, args.concurrency,
-                                 proto, args.hash, fix_base_param,
-                                 match_manager, good_result_cnt, args.depth,
-                                 games_per_trial, th_pruner),
+        study.optimize(Objective(args.engine, input_param, best_param,
+                                 best_value, init_param, init_value,
+                                 args.variant, args.opening_file,
+                                 old_trial_num, args.pgn_output,
+                                 args.base_time_sec, args.inc_time_sec,
+                                 rounds, args.concurrency, args.protocol,
+                                 args.hash, fix_base_param, args.match_manager,
+                                 good_result_cnt, args.depth, games_per_trial,
+                                 th_pruner),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
