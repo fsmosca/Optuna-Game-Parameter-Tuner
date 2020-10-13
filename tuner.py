@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.11'
+__version__ = 'v0.19.12'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -617,6 +617,7 @@ def main():
                              ' \'knight\': {\'default\': 300, \'min\': 250,'
                              ' \'max\': 350, \'step\': 2}}\"'
                         )
+    parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
 
     args = parser.parse_args()
 
