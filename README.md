@@ -14,7 +14,7 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 ## Setup
 
-### Windows 10
+### Install on virtual environment on Windows 10
 * Install python 3.8 or later.  
   * Link: https://www.python.org/downloads/
 * Create game_param_tuner folder on your c or other drive. I will use my d drive. Use your windows explorer to create a folder. It would look like this.  
