@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.19.12'
+__version__ = 'v0.20.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -110,6 +110,9 @@ class Objective(object):
         # Adjust depth for duel.py since its default depth is 0.
         if self.match_manager == 'duel' and self.depth == DEFAULT_SEARCH_DEPTH:
             self.depth = 0
+
+        if self.match_manager == 'cutechess' and self.proto == 'cecp':
+            self.proto = 'xboard'
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
