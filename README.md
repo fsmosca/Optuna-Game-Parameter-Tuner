@@ -56,7 +56,17 @@ Instead of installing each module like optuna, plotly and others. Just install w
 ## D. Supported optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
 * [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) or Covariance Matrix Adaptation Evolution Strategy
-* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html)
+* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/)
+  * acquisition_function
+    * LCB
+    * EI
+    * PI
+    * gp_hedge
+  * base_estimator
+    * GP
+    * RT
+    * ET
+    * GBRT
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
