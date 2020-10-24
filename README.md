@@ -59,14 +59,23 @@ Instead of installing each module like optuna, plotly and others. Just install w
 * [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/)
   * acquisition_function
     * LCB
+      * kappa=1.96, default
+      * kappa=10000, explore
+      * kappa=0.0001, exploit
     * EI
+      * xi = 0.01, default
+      * xi = 10000, explore
+      * xi = 0.0001, exploit
     * PI
+      * xi = 0.01, default
+      * xi = 10000, explore
+      * xi = 0.0001, exploit
     * gp_hedge
   * base_estimator
-    * GP
-    * RT
-    * ET
-    * GBRT
+    * GP - Gaussian Process
+    * RF - Random Forest
+    * ET - Extra Tree
+    * GBRT - Gradient Boosted Regression Trees
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
