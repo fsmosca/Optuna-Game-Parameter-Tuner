@@ -53,8 +53,10 @@ Instead of installing each module like optuna, plotly and others. Just install w
 8. When max_trial is reached, optimization is stopped and png plots will be saved.
 9. You can extend the trials or optimization by running the study again using the same study_name.
 
-## D. Optimization strategy
-It is an [optimization](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize) with default [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) (Tree-structured Parzen Estimator Approach) as surrogate model or sampler. Optuna has some [samplers](https://optuna.readthedocs.io/en/stable/reference/samplers.html) that can be used in the optimization. Currently only the default TPE and an optional [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) and [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) are supported by this tuner.
+## D. Supported optimizers
+* [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
+* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) or Covariance Matrix Adaptation Evolution Strategy
+* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html)
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
