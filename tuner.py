@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.21.0'
+__version__ = 'v0.22.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -593,11 +593,6 @@ def main():
                              '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py\n'
                              '  Instead of using GP one can also use RT or ET or GBRT:\n'
                              '  --sampler name=skopt base_estimator=GBRT\n')
-    parser.add_argument('--direction', choices=['maximize', 'minimize'],
-                        type=str.lower, default='maximize',
-                        help='The choice of whether to maximize or minimize'
-                             ' the objective value to get the desired parameter'
-                             ' values. default=maximize')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
@@ -679,7 +674,7 @@ def main():
 
         # Define study.
         study = optuna.create_study(study_name=study_name,
-                                    direction=args.direction,
+                                    direction='maximize',
                                     storage=f'sqlite:///{storage_file}',
                                     load_if_exists=True, sampler=sampler,
                                     pruner=pruner)
