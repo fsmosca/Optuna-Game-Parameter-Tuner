@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.22.1'
+__version__ = 'v0.22.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -318,7 +318,7 @@ class Objective(object):
         if args_threshold_pruner is not None:
 
             # Default if there is threshold pruner.
-            th_pruner.update({'result': 0.45, 'games': games_per_trial // 2, 'interval': 1})
+            th_pruner.update({'result': 0.25, 'games': games_per_trial // 2, 'interval': 1})
 
             for opt in args_threshold_pruner:
                 for value in opt:
@@ -606,7 +606,7 @@ def main():
                              'prune the trial or stop the engine match. Get new param\n'
                              'from optimizer and start a new trial.\n'
                              'Default values:\n'
-                             'result=0.45, games=games_per_trial/2, interval=1\n'
+                             'result=0.25, games=games_per_trial/2, interval=1\n'
                              'Example:\n'
                              'tuner.py --threshold-pruner ...',
                         default=None)
