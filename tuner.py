@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.22.0'
+__version__ = 'v0.22.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -591,8 +591,10 @@ def main():
                              '  --sampler name=skopt acquisition_function=EI xi=0.0001\n'
                              '  Note: negative xi does not work with PI, but will work with EI.\n'
                              '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py\n'
-                             '  Instead of using GP one can also use RT or ET or GBRT:\n'
-                             '  --sampler name=skopt base_estimator=GBRT\n')
+                             '  skopt has base_estimator options namely: GP, RF, ET and GBRT, default is GP.\n'
+                             '  GP=Gaussian Process, RF=Random Forest, ET=Extra Tree, GBRT=Gradient Boosted Regressor Tree.\n'
+                             '  Example:\n'
+                             '  --sampler name=skopt base_estimator=GBRT acquisition_function=EI ...\n')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
