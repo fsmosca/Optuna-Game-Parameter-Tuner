@@ -56,7 +56,7 @@ Instead of installing each module like optuna, plotly and others. Just install w
 ## D. Supported optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
 * [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) or Covariance Matrix Adaptation Evolution Strategy
-* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/)
+* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
   * acquisition_function
     * LCB
       * kappa=1.96, default
