@@ -31,8 +31,15 @@
 :: --trials 200
 :: Number of trials to execute.
 
+:: --base-time-sec 60
+:: When using time control.
+
+:: --inc-time-sec 0.1
+:: When using time control with increment.
+
 :: --depth 1
 :: Games in the match will be played at this depth value.
+:: See the above options with time control.
 
 :: --plot
 :: After the study a plot will be saved in visuals folder.
