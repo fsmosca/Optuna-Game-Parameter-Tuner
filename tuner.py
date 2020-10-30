@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.22.2'
+__version__ = 'v0.23.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -60,7 +60,7 @@ DEFAULT_SEARCH_DEPTH = 1000
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_value,
                  init_param, init_value, variant, opening_file,
-                 old_trial_num, pgnout, base_time_sec=5,
+                 opening_format, old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
@@ -83,6 +83,7 @@ class Objective(object):
 
         self.concurrency = concurrency
         self.opening_file = opening_file
+        self.opening_format = opening_format
         self.pgnout = pgnout
 
         self.base_time_sec = base_time_sec
@@ -177,7 +178,7 @@ class Objective(object):
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if self.match_manager == 'cutechess':
-            command += f' -openings file={self.opening_file} order=random format=epd'
+            command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
             command += ' -resign movecount=6 score=700 twosided=true'
             command += ' -draw movenumber=30 movecount=6 score=5'
         else:
@@ -550,6 +551,9 @@ def main():
                              'If match manager is cutechess, you can use pgn, fen\n'
                              'or epd format. The format is hard-coded currently.\n'
                              'You have to modify the code.')
+    parser.add_argument('--opening-format', required=True, type=str,
+                        help='Can be pgn, or epd for cutechess match manager,'
+                             'for duel.py no need as it will use epd or fen.')
     parser.add_argument('--variant', required=False, type=str,
                         help='Game variant, default=normal.', default='normal')
     parser.add_argument('--pgn-output', required=False, type=str,
@@ -717,12 +721,12 @@ def main():
         study.optimize(Objective(args.engine, input_param, best_param,
                                  best_value, init_param, init_value,
                                  args.variant, args.opening_file,
-                                 old_trial_num, args.pgn_output,
-                                 args.base_time_sec, args.inc_time_sec,
-                                 rounds, args.concurrency, args.protocol,
-                                 args.hash, fix_base_param, args.match_manager,
-                                 good_result_cnt, args.depth, games_per_trial,
-                                 th_pruner),
+                                 args.opening_format, old_trial_num,
+                                 args.pgn_output, args.base_time_sec,
+                                 args.inc_time_sec, rounds, args.concurrency,
+                                 args.protocol, args.hash, fix_base_param,
+                                 args.match_manager, good_result_cnt,
+                                 args.depth, games_per_trial, th_pruner),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
