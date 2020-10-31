@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.23.0'
+__version__ = 'v0.23.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -171,6 +171,7 @@ class Objective(object):
         command += ' -tournament round-robin'
 
         if self.match_manager == 'cutechess':
+            command += ' -recover'
             command += f' -rounds {games//2} -games 2 -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
         else:
