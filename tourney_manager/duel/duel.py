@@ -5,6 +5,7 @@ A module to handle xboard or winboard engine matches.
 """
 
 
+import os
 import subprocess
 import argparse
 import time
@@ -14,6 +15,7 @@ from concurrent.futures import ProcessPoolExecutor
 import logging
 from statistics import mean
 from typing import List
+import multiprocessing
 
 
 logging.basicConfig(
@@ -148,8 +150,9 @@ def turn(fen):
     return False
 
 
-def save_game(outfn, fen, moves, scores, depths, e1, e2, start_turn, gres,
+def save_game(lock, outfn, fen, moves, scores, depths, e1, e2, start_turn, gres,
               termination='', variant=''):
+    lock.acquire()
     logging.info('Saving game ...')
     with open(outfn, 'a') as f:
         f.write('[Event "Optimization test"]\n')
@@ -184,6 +187,8 @@ def save_game(outfn, fen, moves, scores, depths, e1, e2, start_turn, gres,
             if (i + 1) % 5 == 0:
                 f.write('\n')
         f.write('\n\n')
+
+    lock.release()
 
 
 def adjudicate_win(score_history, resign_option, side):
@@ -329,7 +334,7 @@ def time_forfeit(is_timeup, current_color, test_engine_color):
     return game_end, gres, e1score
 
 
-def match(e1, e2, fen, output_game_file, variant, draw_option,
+def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
           resign_option, repeat=2) -> List[float]:
     """
     Run an engine match between e1 and e2. Save the game and print result
@@ -548,7 +553,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
             current_color = not current_color
 
         if output_game_file is not None:
-            save_game(output_game_file, fen, move_hist, score_history,
+            save_game(lock, output_game_file, fen, move_hist, score_history,
                       depth_history, eng[0]["name"], eng[1]["name"],
                       start_turn, gres, termination, variant)
 
@@ -561,7 +566,7 @@ def match(e1, e2, fen, output_game_file, variant, draw_option,
     return all_e1score
 
 
-def round_match(fen, e1, e2, output_game_file, repeat, draw_option,
+def round_match(lock, fen, e1, e2, output_game_file, repeat, draw_option,
                 resign_option, variant, posround=1) -> List[float]:
     """
     Play a match between e1 and e2 using fen as starting position. By default
@@ -572,7 +577,7 @@ def round_match(fen, e1, e2, output_game_file, repeat, draw_option,
     test_engine_score = []
 
     for _ in range(posround):
-        res = match(e1, e2, fen, output_game_file, variant,
+        res = match(lock, e1, e2, fen, output_game_file, variant,
                     draw_option, resign_option, repeat=repeat)
         test_engine_score.append(res)
 
@@ -701,12 +706,14 @@ def main():
     test_engine_score_list = []
     total_games = max(1, args.rounds // args.repeat)
 
+    lock = multiprocessing.Manager().Lock()
+
     # Use Python 3.8 or higher
     with ProcessPoolExecutor(max_workers=args.concurrency) as executor:
         for i, fen in enumerate(fens if len(fens) else range(1000)):
             if i >= total_games:
                 break
-            job = executor.submit(round_match, fen, e1, e2,
+            job = executor.submit(round_match, lock, fen, e1, e2,
                                   output_game_file, args.repeat,
                                   draw_option, resign_option, args.variant,
                                   posround)
