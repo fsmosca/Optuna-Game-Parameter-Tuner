@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.24.0'
+__version__ = 'v0.25.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -65,7 +65,7 @@ class Objective(object):
                  proto='uci', hashmb=64, fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
-                 threshold_pruner={}):
+                 threshold_pruner={}, common_param=None):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -114,6 +114,8 @@ class Objective(object):
 
         if self.match_manager == 'cutechess' and self.proto == 'cecp':
             self.proto = 'xboard'
+
+        self.common_param = common_param
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -352,6 +354,12 @@ class Objective(object):
             par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
+
+        # Add common param. It should not be included in the test param.
+        if self.common_param is not None:
+            for k, v in self.common_param.items():
+                test_options += f'option.{k}={v} '
+
         test_options.rstrip()
 
         # Options for base engine.
@@ -366,6 +374,12 @@ class Objective(object):
             else:
                 for k, v in self.init_param.items():
                     base_options += f'option.{k}={v} '
+
+        # Add common param. It should not be included in the test param.
+        if self.common_param is not None:
+            for k, v in self.common_param.items():
+                base_options += f'option.{k}={v} '
+
         base_options.rstrip()
 
         # Log info to console.
@@ -377,6 +391,9 @@ class Objective(object):
                 logger.info(f'param for base engine          : {self.best_param}\n')
             else:
                 logger.info(f'param for base engine          : {self.init_param}\n')
+
+        if self.common_param is not None:
+            logger.info(f'common param: {self.common_param}')
 
         logger.info(f'init param: {self.init_param}')
         logger.info(f'init value: {self.init_value}')
@@ -628,6 +645,11 @@ def main():
                              ' \'max\': 350, \'step\': 2}}\"'
                         )
     parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
+    parser.add_argument('--common-param', required=False, type=str,
+                        help='The parameters that will be sent to both test and base engines.\n'
+                             'Make sure that this param is not included in the input-param.\n'
+                             'Example:\n'
+                             '--common-param \"{\'RookOpenFile\': 92, \'KnightOutpost\': 300}\"')
 
     args = parser.parse_args()
 
@@ -635,6 +657,10 @@ def main():
     init_value = args.initial_best_value
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
+    common_param = args.common_param
+
+    if common_param is not None:
+        common_param = ast.literal_eval(common_param)
 
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
@@ -728,7 +754,8 @@ def main():
                                  args.inc_time_sec, rounds, args.concurrency,
                                  args.protocol, args.hash, fix_base_param,
                                  args.match_manager, good_result_cnt,
-                                 args.depth, games_per_trial, th_pruner),
+                                 args.depth, games_per_trial, th_pruner,
+                                 common_param),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
