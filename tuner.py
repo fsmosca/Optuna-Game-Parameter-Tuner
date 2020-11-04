@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.23.1'
+__version__ = 'v0.24.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -552,9 +552,10 @@ def main():
                              'If match manager is cutechess, you can use pgn, fen\n'
                              'or epd format. The format is hard-coded currently.\n'
                              'You have to modify the code.')
-    parser.add_argument('--opening-format', required=True, type=str,
+    parser.add_argument('--opening-format', required=False, type=str,
                         help='Can be pgn, or epd for cutechess match manager,'
-                             'for duel.py no need as it will use epd or fen.')
+                             'default is pgn, for duel.py no need as it will use epd or fen.',
+                        default='pgn')
     parser.add_argument('--variant', required=False, type=str,
                         help='Game variant, default=normal.', default='normal')
     parser.add_argument('--pgn-output', required=False, type=str,
