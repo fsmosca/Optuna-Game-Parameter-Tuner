@@ -5,7 +5,7 @@ A module to handle xboard or winboard engine matches.
 """
 
 
-import os
+from pathlib import Path
 import subprocess
 import argparse
 import time
@@ -348,16 +348,19 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
     for gn in range(repeat):
         logging.info(f'Match game no. {gn + 1}')
         logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
+        e1_folder, e2_folder = Path(e1['cmd']).parent, Path(e2['cmd']).parent
 
         pe1 = subprocess.Popen(e1['cmd'], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT,
-                               universal_newlines=True, bufsize=1)
+                               universal_newlines=True, bufsize=1,
+                               cwd=e1_folder)
 
         pe2 = subprocess.Popen(e2['cmd'], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT,
-                               universal_newlines=True, bufsize=1)
+                               universal_newlines=True, bufsize=1,
+                               cwd=e2_folder)
 
         e1.update({'proc': pe1})
         e2.update({'proc': pe2})
