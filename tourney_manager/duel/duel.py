@@ -409,6 +409,14 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
             e.stdin.write('new\n')
             logging.debug(f'{pn} > new')
 
+            # Set to ponder on
+            e.stdin.write('hard\n')
+            logging.debug(f'{pn} > hard')
+
+            # Set to ponder off
+            e.stdin.write('easy\n')
+            logging.debug(f'{pn} > easy')
+
             e.stdin.write('post\n')
             logging.debug(f'{pn} > post')
 
