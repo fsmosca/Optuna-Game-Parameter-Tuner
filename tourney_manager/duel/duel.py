@@ -582,19 +582,17 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
 
 
 def round_match(lock, fen, e1, e2, output_game_file, repeat, draw_option,
-                resign_option, variant, posround=1) -> List[float]:
+                resign_option, variant) -> List[float]:
     """
     Play a match between e1 and e2 using fen as starting position. By default
-    2 games will be played color is reversed. If posround is more than 1, the
-    match will be repeated posround times. The purpose of posround is to verify
-    that the match result is repeatable with the use of only a single fen.
+    2 games will be played color is reversed.
     """
     test_engine_score = []
 
-    for _ in range(posround):
-        res = match(lock, e1, e2, fen, output_game_file, variant,
-                    draw_option, resign_option, repeat=repeat)
-        test_engine_score.append(res)
+
+    res = match(lock, e1, e2, fen, output_game_file, variant,
+                draw_option, resign_option, repeat=repeat)
+    test_engine_score.append(res)
 
     return test_engine_score
 
@@ -710,7 +708,6 @@ def main():
             resign_option.update({key: val})
 
     is_random_startpos = True
-    posround = 1  # Number of times the same position is played
 
     fens = get_fen_list(fen_file, is_random_startpos)
 
@@ -730,8 +727,7 @@ def main():
                 break
             job = executor.submit(round_match, lock, fen, e1, e2,
                                   output_game_file, args.repeat,
-                                  draw_option, resign_option, args.variant,
-                                  posround)
+                                  draw_option, resign_option, args.variant)
             joblist.append(job)
 
         for future in concurrent.futures.as_completed(joblist):
