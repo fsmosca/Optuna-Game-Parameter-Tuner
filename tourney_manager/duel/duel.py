@@ -334,6 +334,12 @@ def time_forfeit(is_timeup, current_color, test_engine_color):
     return game_end, gres, e1score
 
 
+def send_command(proc, command, name=''):
+    """Send command to engine process."""
+    proc.stdin.write(f'{command}\n')
+    logging.debug(f'{name} > {command}')
+
+
 def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
           resign_option, repeat=2) -> List[float]:
     """
@@ -374,10 +380,8 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
             e = pr['proc']
             pn = pr['name']
 
-            e.stdin.write('xboard\n')
-            logging.debug(f'{pn} > xboard')
-            e.stdin.write('protover 2\n')
-            logging.debug(f'{pn} > protover 2')
+            send_command(e, 'xboard', pn)
+            send_command(e, 'protover 2', pn)
 
             for eline in iter(e.stdout.readline, ''):
                 line = eline.strip()
@@ -387,38 +391,31 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
 
             # Set param to engines.
             for k, v in pr['opt'].items():
-                e.stdin.write(f'option {k}={v}\n')
-                logging.debug(f'{pn} > option {k}={v}')
+                send_command(e, f'option {k}={v}', pn)
 
         timer, depth_control = [], []
         for i, pr in enumerate(eng):
             e = pr['proc']
             pn = pr['name']
 
-            e.stdin.write(f'variant {variant}\n')
-            logging.debug(f'{pn} > variant {variant}')
+            send_command(e, f'variant {variant}', pn)
 
-            e.stdin.write('ping 1\n')
-            logging.debug(f'{pn} > ping 1')
+            send_command(e, 'ping 1', pn)
             for eline in iter(e.stdout.readline, ''):
                 line = eline.strip()
                 logging.debug(f'{pn} < {line}')
                 if 'pong' in line:
                     break
 
-            e.stdin.write('new\n')
-            logging.debug(f'{pn} > new')
+            send_command(e, 'new', pn)
 
             # Set to ponder on
-            e.stdin.write('hard\n')
-            logging.debug(f'{pn} > hard')
+            send_command(e, 'hard', pn)
 
             # Set to ponder off
-            e.stdin.write('easy\n')
-            logging.debug(f'{pn} > easy')
+            send_command(e, 'easy', pn)
 
-            e.stdin.write('post\n')
-            logging.debug(f'{pn} > post')
+            send_command(e, 'post', pn)
 
             # Define time control, base time in minutes and inc in seconds.
             base_minv, base_secv, incv = get_tc(pr['tc'])
@@ -428,22 +425,17 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
 
             # Send level command to each engine.
             tbase = max(1, all_base_sec//60)
-            e.stdin.write(f'level 0 {tbase} {float(incv):0.2f}\n')
-            logging.debug(f'{pn} > level 0 {tbase} {float(incv):0.2f}')
+            send_command(e, f'level 0 {tbase} {float(incv):0.2f}', pn)
 
             # Setup Timer, convert base time to ms and inc in sec to ms
             timer.append(Timer(all_base_sec * 1000, int(incv * 1000)))
 
             depth_control.append(pr['depth'])
 
-            e.stdin.write('force\n')
-            logging.debug(f'{pn} > force')
+            send_command(e, 'force', pn)
+            send_command(e, f'setboard {fen}', pn)
 
-            e.stdin.write(f'setboard {fen}\n')
-            logging.debug(f'{pn} > setboard {fen}')
-
-            e.stdin.write('ping 2\n')
-            logging.debug(f'{pn} > ping 2')
+            send_command(e, 'ping 2', pn)
             for eline in iter(e.stdout.readline, ''):
                 line = eline.strip()
                 logging.debug(f'{pn} < {line}')
@@ -463,29 +455,22 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
         # Start the game.
         while True:
             if depth_control[side] > 0:
-                eng[side]['proc'].stdin.write(f'sd {depth_control[side]}\n')
-                logging.debug(f'{eng[side]["name"]} > sd {depth_control[side]}')
+                send_command(eng[side]['proc'], f'sd {depth_control[side]}', eng[side]['name'])
             else:
-                eng[side]['proc'].stdin.write(f'time {timer[side].rem_cs()}\n')
-                logging.debug(f'{eng[side]["name"]} > time {timer[side].rem_cs()}')
-
-                eng[side]['proc'].stdin.write(f'otim {timer[not side].rem_cs()}\n')
-                logging.debug(f'{eng[side]["name"]} > otim {timer[not side].rem_cs()}')
+                send_command(eng[side]['proc'], f'time {timer[side].rem_cs()}', eng[side]['name'])
+                send_command(eng[side]['proc'], f'otim {timer[not side].rem_cs()}', eng[side]['name'])
 
             t1 = time.perf_counter_ns()
 
             if num == 0:
-                eng[side]['proc'].stdin.write('go\n')
-                logging.debug(f'{eng[side]["name"]} > go')
+                send_command(eng[side]['proc'], 'go', eng[side]['name'])
             else:
                 move_hist.append(move)
-                eng[side]['proc'].stdin.write(f'{move}\n')
-                logging.debug(f'{eng[side]["name"]} > {move}')
+                send_command(eng[side]['proc'], f'{move}', eng[side]['name'])
 
                 # Send another go because of force.
                 if num == 1:
-                    eng[side]['proc'].stdin.write('go\n')
-                    logging.debug(f'{eng[side]["name"]} > go')
+                    send_command(eng[side]['proc'], 'go', eng[side]['name'])
 
             num += 1
             score, depth = None, None
@@ -528,8 +513,7 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
             if game_end:
                 # Send result to each engine after a claim of such result.
                 for e in eng:
-                    e['proc'].stdin.write(f'result {gresr}\n')
-                    logging.debug(f'{e["name"]} > result {gresr}')
+                    send_command(e['proc'], f'result {gresr}', e['name'])
                 break
 
             # Game adjudications
@@ -573,8 +557,7 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
                       start_turn, gres, termination, variant)
 
         for i, e in enumerate(eng):
-            e['proc'].stdin.write('quit\n')
-            logging.debug(f'{e["name"]} > quit')
+            send_command(e['proc'], 'quit', e['name'])
 
         all_e1score.append(e1score)
 
