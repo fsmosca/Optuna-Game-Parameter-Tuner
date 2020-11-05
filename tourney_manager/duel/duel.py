@@ -601,8 +601,10 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-rounds', required=False,
-                        help='Number of encounter. Can be number of games if repeat is 2, default=2\n',
-                        type=int, default=2)
+                        help='Number of games per encounter per position.\n'
+                             'If rounds is 1 (default) and repeat is 2\n'
+                             'then total games will be 2.',
+                        type=int, default=1)
     parser.add_argument('-repeat', required=False,
                         help='Number of times to play a certain opening\n'
                              'default is 2 so that the position will be\n'
@@ -716,14 +718,14 @@ def main():
     # Start match
     joblist = []
     test_engine_score_list = []
-    total_games = max(1, args.rounds // args.repeat)
+    round = args.rounds
 
     lock = multiprocessing.Manager().Lock()
 
     # Use Python 3.8 or higher
     with ProcessPoolExecutor(max_workers=args.concurrency) as executor:
-        for i, fen in enumerate(fens if len(fens) else range(1000)):
-            if i >= total_games:
+        for i, fen in enumerate(fens if len(fens) else range(round)):
+            if i >= round:
                 break
             job = executor.submit(round_match, lock, fen, e1, e2,
                                   output_game_file, args.repeat,
