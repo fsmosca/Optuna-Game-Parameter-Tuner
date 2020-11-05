@@ -515,6 +515,10 @@ def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
                     break
 
             if game_end:
+                # Send result to each engine after a claim of such result.
+                for e in eng:
+                    e['proc'].stdin.write(f'result {gresr}\n')
+                    logging.debug(f'{e["name"]} > result {gresr}')
                 break
 
             # Game adjudications
