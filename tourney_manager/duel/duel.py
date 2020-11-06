@@ -1,8 +1,17 @@
-"""
-duel.py
+#!/usr/bin/env python
+
+
+""""
+Duel
 
 A module to handle xboard or winboard engine matches.
 """
+
+
+__author__ = 'fsmosca'
+__script_name__ = 'Duel'
+__version__ = 'v1.0.0'
+__credits__ = ['musketeerchess']
 
 
 from pathlib import Path
@@ -582,7 +591,10 @@ def round_match(lock, fen, e1, e2, output_game_file, repeat, draw_option,
 
 def main():
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        prog='%s %s' % (__script_name__, __version__),
+        description='Conduct engine vs engine matches for cecp engines.',
+        epilog='%(prog)s')
     parser.add_argument('-rounds', required=False,
                         help='Number of games per encounter per position.\n'
                              'If rounds is 1 (default) and repeat is 2\n'
@@ -628,6 +640,7 @@ def main():
     parser.add_argument('-tournament', required=False, default='round-robin',
                         metavar='tour_type',
                         help='tournament type, default=round-robin')
+    parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
 
     args = parser.parse_args()
 
