@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.0.0'
+__version__ = 'v1.1.0'
 __credits__ = ['musketeerchess']
 
 
@@ -709,8 +709,6 @@ def main():
 
     fens = get_fen_list(fen_file, is_random_startpos)
 
-    output_game_file = args.pgnout
-
     # Start match
     joblist = []
     test_engine_score_list = []
@@ -724,7 +722,7 @@ def main():
             if i >= round:
                 break
             job = executor.submit(round_match, lock, fen, e1, e2,
-                                  output_game_file, args.repeat,
+                                  args.pgnout, args.repeat,
                                   draw_option, resign_option, args.variant)
             joblist.append(job)
 
