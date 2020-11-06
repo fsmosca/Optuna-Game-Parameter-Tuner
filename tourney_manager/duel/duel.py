@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.1.0'
+__version__ = 'v1.2.0'
 __credits__ = ['musketeerchess']
 
 
@@ -54,6 +54,324 @@ class Timer:
 
     def rem_cs(self):
         return self.rem_time // 10
+
+
+class Duel:
+    def __init__(self, e1, e2, fens, rounds, concurrency, pgnout, repeat, draw_option,
+                 resign_option, variant):
+        self.e1 = e1
+        self.e2 = e2
+        self.fens = fens
+        self.rounds = rounds
+        self.concurrency = concurrency
+        self.pgnout = pgnout
+        self.repeat = repeat
+        self.draw_option = draw_option
+        self.resign_option = resign_option
+        self.variant = variant
+
+        self.lock = multiprocessing.Manager().Lock()
+
+    def save_game(self, fen, moves, scores, depths, e1_name, e2_name,
+                  start_turn, gres, termination=''):
+        self.lock.acquire()
+        logging.info('Saving game ...')
+        with open(self.pgnout, 'a') as f:
+            f.write('[Event "Optimization test"]\n')
+            f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
+            f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
+            f.write(f'[Result "{gres}"]\n')
+
+            f.write(f'[Variant "{self.variant}"]\n')
+
+            if termination != '':
+                f.write(f'[Termination "{termination}"]\n')
+
+            if not isinstance(fen, int):
+                f.write(f'[FEN "{fen}"]\n\n')
+            else:
+                f.write('\n')
+
+            for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
+                num = i + 1
+                if num % 2 == 0:
+                    if start_turn:
+                        str_num = f'{num // 2}... '
+                    else:
+                        str_num = f'{num // 2}. '
+                else:
+                    num += 1
+                    if start_turn:
+                        str_num = f'{num // 2}. '
+                    else:
+                        str_num = f'{num // 2}... '
+                f.write(f'{str_num}{m} {{{s}/{d}}} ')
+                if (i + 1) % 5 == 0:
+                    f.write('\n')
+            f.write('\n\n')
+
+        self.lock.release()
+
+    def match(self, fen) -> List[float]:
+        """
+        Run an engine match between e1 and e2. Save the game and print result
+        from e1 perspective.
+        """
+        move_hist = []
+        all_e1score = []
+        is_show_search_info = False
+
+        # Start engine match, 2 games will be played.
+        for gn in range(self.repeat):
+            logging.info(f'Match game no. {gn + 1}')
+            logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
+            e1_folder, e2_folder = Path(self.e1['cmd']).parent, Path(self.e2['cmd']).parent
+
+            pe1 = subprocess.Popen(self.e1['cmd'], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT,
+                                   universal_newlines=True, bufsize=1,
+                                   cwd=e1_folder)
+
+            pe2 = subprocess.Popen(self.e2['cmd'], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT,
+                                   universal_newlines=True, bufsize=1,
+                                   cwd=e2_folder)
+
+            self.e1.update({'proc': pe1})
+            self.e2.update({'proc': pe2})
+
+            if gn % 2 == 0:
+                eng = [self.e1, self.e2]
+            else:
+                eng = [self.e2, self.e1]
+
+            for i, pr in enumerate(eng):
+                e = pr['proc']
+                pn = pr['name']
+
+                send_command(e, 'xboard', pn)
+                send_command(e, 'protover 2', pn)
+
+                for eline in iter(e.stdout.readline, ''):
+                    line = eline.strip()
+                    logging.debug(f'{pn} < {line}')
+                    if 'done=1' in line:
+                        break
+
+                # Set param to engines.
+                for k, v in pr['opt'].items():
+                    send_command(e, f'option {k}={v}', pn)
+
+            timer, depth_control = [], []
+            for i, pr in enumerate(eng):
+                e = pr['proc']
+                pn = pr['name']
+
+                send_command(e, f'variant {self.variant}', pn)
+
+                send_command(e, 'ping 1', pn)
+                for eline in iter(e.stdout.readline, ''):
+                    line = eline.strip()
+                    logging.debug(f'{pn} < {line}')
+                    if 'pong' in line:
+                        break
+
+                send_command(e, 'new', pn)
+
+                # Set to ponder on
+                send_command(e, 'hard', pn)
+
+                # Set to ponder off
+                send_command(e, 'easy', pn)
+
+                send_command(e, 'post', pn)
+
+                # Define time control, base time in minutes and inc in seconds.
+                base_minv, base_secv, incv = get_tc(pr['tc'])
+                all_base_sec = base_minv * 60 + base_secv
+
+                logging.info(f'base_minv: {base_minv}m, base_secv: {base_secv}s, incv: {incv}s')
+
+                # Send level command to each engine.
+                tbase = max(1, all_base_sec // 60)
+                send_command(e, f'level 0 {tbase} {float(incv):0.2f}', pn)
+
+                # Setup Timer, convert base time to ms and inc in sec to ms
+                timer.append(Timer(all_base_sec * 1000, int(incv * 1000)))
+
+                depth_control.append(pr['depth'])
+
+                send_command(e, 'force', pn)
+                send_command(e, f'setboard {fen}', pn)
+
+                send_command(e, 'ping 2', pn)
+                for eline in iter(e.stdout.readline, ''):
+                    line = eline.strip()
+                    logging.debug(f'{pn} < {line}')
+                    if 'pong' in line:
+                        break
+
+            num, side, move, line, game_end = 0, 0, None, '', False
+            score_history, elapse_history, depth_history = [], [], []
+            start_turn = turn(fen) if not isinstance(fen, int) else True
+            gres, e1score = '*', 0.0
+            is_time_over = [False, False]
+            current_color = start_turn  # True if white to move
+
+            test_engine_color = True if ((start_turn and gn % 2 == 0) or (not start_turn and gn % 2 != 0)) else False
+            termination = ''
+
+            # Start the game.
+            while True:
+                if depth_control[side] > 0:
+                    send_command(eng[side]['proc'], f'sd {depth_control[side]}', eng[side]['name'])
+                else:
+                    send_command(eng[side]['proc'], f'time {timer[side].rem_cs()}', eng[side]['name'])
+                    send_command(eng[side]['proc'], f'otim {timer[not side].rem_cs()}', eng[side]['name'])
+
+                t1 = time.perf_counter_ns()
+
+                if num == 0:
+                    send_command(eng[side]['proc'], 'go', eng[side]['name'])
+                else:
+                    move_hist.append(move)
+                    send_command(eng[side]['proc'], f'{move}', eng[side]['name'])
+
+                    # Send another go because of force.
+                    if num == 1:
+                        send_command(eng[side]['proc'], 'go', eng[side]['name'])
+
+                num += 1
+                score, depth = None, None
+
+                for eline in iter(eng[side]['proc'].stdout.readline, ''):
+                    line = eline.strip()
+
+                    logging.debug(f'{eng[side]["name"]} < {line}')
+
+                    if is_show_search_info:
+                        if not line.startswith('#'):
+                            print(line)
+
+                    # Save score and depth from engine search info.
+                    if line.split()[0].isdigit():
+                        score = int(line.split()[1])  # cp
+                        depth = int(line.split()[0])
+
+                    # Check end of game as claimed by engines.
+                    game_endr, gresr, e1scorer, termi = is_game_end(line, test_engine_color)
+                    if game_endr:
+                        game_end, gres, e1score, termination = game_endr, gresr, e1scorer, termi
+                        break
+
+                    if 'move ' in line and not line.startswith('#'):
+                        elapse = (time.perf_counter_ns() - t1) // 1000000
+                        timer[side].update(elapse)
+                        elapse_history.append(elapse)
+
+                        move = line.split('move ')[1]
+                        score_history.append(score if score is not None else 0)
+                        depth_history.append(depth if depth is not None else 0)
+
+                        if timer[side].is_zero_time():
+                            is_time_over[current_color] = True
+                            termination = 'forfeits on time'
+                            logging.info('time is over')
+                        break
+
+                if game_end:
+                    # Send result to each engine after a claim of such result.
+                    for e in eng:
+                        send_command(e['proc'], f'result {gresr}', e['name'])
+                    break
+
+                # Game adjudications
+
+                # Resign
+                if (self.resign_option['movecount'] is not None
+                        and self.resign_option['score'] is not None):
+                    game_endr, gresr, e1scorer = adjudicate_win(
+                        score_history, self.resign_option, side)
+
+                    if game_endr:
+                        gres, e1score = gresr, e1scorer
+                        logging.info('Game ends by resign adjudication.')
+                        break
+
+                # Draw
+                if (self.draw_option['movenumber'] is not None
+                        and self.draw_option['movenumber'] is not None
+                        and self.draw_option['score'] is not None):
+                    game_endr, gresr, e1scorer = adjudicate_draw(
+                        score_history, self.draw_option)
+                    if game_endr:
+                        gres, e1score = gresr, e1scorer
+                        logging.info('Game ends by resign adjudication.')
+                        break
+
+                # Time is over
+                if depth_control[side] == 0:
+                    game_endr, gresr, e1scorer = time_forfeit(
+                        is_time_over[current_color], current_color, test_engine_color)
+                    if game_endr:
+                        gres, e1score = gresr, e1scorer
+                        break
+
+                side = not side
+                current_color = not current_color
+
+            if self.pgnout is not None:
+                self.save_game(fen, move_hist, score_history,
+                          depth_history, eng[0]["name"], eng[1]["name"],
+                          start_turn, gres, termination)
+
+            for i, e in enumerate(eng):
+                send_command(e['proc'], 'quit', e['name'])
+
+            all_e1score.append(e1score)
+
+        return all_e1score
+
+    def round_match(self, fen) -> List[float]:
+        """
+        Play a match between e1 and e2 using fen as starting position. By default
+        2 games will be played color is reversed.
+        """
+        test_engine_score = []
+
+        res = self.match(fen)
+        test_engine_score.append(res)
+
+        return test_engine_score
+
+    def run(self):
+        """Start the match."""
+        joblist = []
+        test_engine_score_list = []
+
+        # Use Python 3.8 or higher
+        with ProcessPoolExecutor(max_workers=self.concurrency) as executor:
+            for i, fen in enumerate(self.fens if len(self.fens) else range(self.rounds)):
+                if i >= self.rounds:
+                    break
+                job = executor.submit(self.round_match, fen)
+                joblist.append(job)
+
+            for future in concurrent.futures.as_completed(joblist):
+                try:
+                    test_engine_score = future.result()[0]
+                    for s in test_engine_score:
+                        test_engine_score_list.append(s)
+                    perf = mean(test_engine_score_list)
+                    games = len(test_engine_score_list)
+                    print(f'Score of {self.e1["name"]} vs {self.e2["name"]}: [{perf}] {games}')
+                except concurrent.futures.process.BrokenProcessPool as ex:
+                    print(f'exception: {ex}')
+
+        logging.info(f'final test score: {mean(test_engine_score_list)}')
+        print('Finished match')
 
 
 def define_engine(engine_option_value):
@@ -157,47 +475,6 @@ def turn(fen):
     if side == 'w':
         return True
     return False
-
-
-def save_game(lock, outfn, fen, moves, scores, depths, e1, e2, start_turn, gres,
-              termination='', variant=''):
-    lock.acquire()
-    logging.info('Saving game ...')
-    with open(outfn, 'a') as f:
-        f.write('[Event "Optimization test"]\n')
-        f.write(f'[White "{e1 if start_turn else e2}"]\n')
-        f.write(f'[Black "{e1 if not start_turn else e2}"]\n')
-        f.write(f'[Result "{gres}"]\n')
-
-        f.write(f'[Variant "{variant}"]\n')
-
-        if termination != '':
-            f.write(f'[Termination "{termination}"]\n')
-
-        if not isinstance(fen, int):
-            f.write(f'[FEN "{fen}"]\n\n')
-        else:
-            f.write('\n')
-
-        for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
-            num = i + 1
-            if num % 2 == 0:
-                if start_turn:
-                    str_num = f'{num // 2}... '
-                else:
-                    str_num = f'{num // 2}. '
-            else:
-                num += 1
-                if start_turn:
-                    str_num = f'{num // 2}. '
-                else:
-                    str_num = f'{num // 2}... '
-            f.write(f'{str_num}{m} {{{s}/{d}}} ')
-            if (i + 1) % 5 == 0:
-                f.write('\n')
-        f.write('\n\n')
-
-    lock.release()
 
 
 def adjudicate_win(score_history, resign_option, side):
@@ -349,246 +626,6 @@ def send_command(proc, command, name=''):
     logging.debug(f'{name} > {command}')
 
 
-def match(lock, e1, e2, fen, output_game_file, variant, draw_option,
-          resign_option, repeat=2) -> List[float]:
-    """
-    Run an engine match between e1 and e2. Save the game and print result
-    from e1 perspective.
-    """
-    move_hist = []
-    all_e1score = []
-    is_show_search_info = False
-
-    # Start engine match, 2 games will be played.
-    for gn in range(repeat):
-        logging.info(f'Match game no. {gn + 1}')
-        logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
-        e1_folder, e2_folder = Path(e1['cmd']).parent, Path(e2['cmd']).parent
-
-        pe1 = subprocess.Popen(e1['cmd'], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT,
-                               universal_newlines=True, bufsize=1,
-                               cwd=e1_folder)
-
-        pe2 = subprocess.Popen(e2['cmd'], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT,
-                               universal_newlines=True, bufsize=1,
-                               cwd=e2_folder)
-
-        e1.update({'proc': pe1})
-        e2.update({'proc': pe2})
-
-        if gn % 2 == 0:
-            eng = [e1, e2]
-        else:
-            eng = [e2, e1]
-
-        for i, pr in enumerate(eng):
-            e = pr['proc']
-            pn = pr['name']
-
-            send_command(e, 'xboard', pn)
-            send_command(e, 'protover 2', pn)
-
-            for eline in iter(e.stdout.readline, ''):
-                line = eline.strip()
-                logging.debug(f'{pn} < {line}')
-                if 'done=1' in line:
-                    break
-
-            # Set param to engines.
-            for k, v in pr['opt'].items():
-                send_command(e, f'option {k}={v}', pn)
-
-        timer, depth_control = [], []
-        for i, pr in enumerate(eng):
-            e = pr['proc']
-            pn = pr['name']
-
-            send_command(e, f'variant {variant}', pn)
-
-            send_command(e, 'ping 1', pn)
-            for eline in iter(e.stdout.readline, ''):
-                line = eline.strip()
-                logging.debug(f'{pn} < {line}')
-                if 'pong' in line:
-                    break
-
-            send_command(e, 'new', pn)
-
-            # Set to ponder on
-            send_command(e, 'hard', pn)
-
-            # Set to ponder off
-            send_command(e, 'easy', pn)
-
-            send_command(e, 'post', pn)
-
-            # Define time control, base time in minutes and inc in seconds.
-            base_minv, base_secv, incv = get_tc(pr['tc'])
-            all_base_sec = base_minv * 60 + base_secv
-
-            logging.info(f'base_minv: {base_minv}m, base_secv: {base_secv}s, incv: {incv}s')
-
-            # Send level command to each engine.
-            tbase = max(1, all_base_sec//60)
-            send_command(e, f'level 0 {tbase} {float(incv):0.2f}', pn)
-
-            # Setup Timer, convert base time to ms and inc in sec to ms
-            timer.append(Timer(all_base_sec * 1000, int(incv * 1000)))
-
-            depth_control.append(pr['depth'])
-
-            send_command(e, 'force', pn)
-            send_command(e, f'setboard {fen}', pn)
-
-            send_command(e, 'ping 2', pn)
-            for eline in iter(e.stdout.readline, ''):
-                line = eline.strip()
-                logging.debug(f'{pn} < {line}')
-                if 'pong' in line:
-                    break
-
-        num, side, move, line, game_end = 0, 0, None, '', False
-        score_history, elapse_history, depth_history = [], [], []
-        start_turn = turn(fen) if not isinstance(fen, int) else True
-        gres, e1score = '*', 0.0
-        is_time_over = [False, False]
-        current_color = start_turn  # True if white to move
-
-        test_engine_color = True if ((start_turn and gn % 2 == 0) or (not start_turn and gn % 2 != 0)) else False
-        termination = ''
-
-        # Start the game.
-        while True:
-            if depth_control[side] > 0:
-                send_command(eng[side]['proc'], f'sd {depth_control[side]}', eng[side]['name'])
-            else:
-                send_command(eng[side]['proc'], f'time {timer[side].rem_cs()}', eng[side]['name'])
-                send_command(eng[side]['proc'], f'otim {timer[not side].rem_cs()}', eng[side]['name'])
-
-            t1 = time.perf_counter_ns()
-
-            if num == 0:
-                send_command(eng[side]['proc'], 'go', eng[side]['name'])
-            else:
-                move_hist.append(move)
-                send_command(eng[side]['proc'], f'{move}', eng[side]['name'])
-
-                # Send another go because of force.
-                if num == 1:
-                    send_command(eng[side]['proc'], 'go', eng[side]['name'])
-
-            num += 1
-            score, depth = None, None
-
-            for eline in iter(eng[side]['proc'].stdout.readline, ''):
-                line = eline.strip()
-
-                logging.debug(f'{eng[side]["name"]} < {line}')
-
-                if is_show_search_info:
-                    if not line.startswith('#'):
-                        print(line)
-
-                # Save score and depth from engine search info.
-                if line.split()[0].isdigit():
-                    score = int(line.split()[1])  # cp
-                    depth = int(line.split()[0])
-
-                # Check end of game as claimed by engines.
-                game_endr, gresr, e1scorer, termi = is_game_end(line, test_engine_color)
-                if game_endr:
-                    game_end, gres, e1score, termination = game_endr, gresr, e1scorer, termi
-                    break
-
-                if 'move ' in line and not line.startswith('#'):
-                    elapse = (time.perf_counter_ns() - t1) // 1000000
-                    timer[side].update(elapse)
-                    elapse_history.append(elapse)
-
-                    move = line.split('move ')[1]
-                    score_history.append(score if score is not None else 0)
-                    depth_history.append(depth if depth is not None else 0)
-
-                    if timer[side].is_zero_time():
-                        is_time_over[current_color] = True
-                        termination = 'forfeits on time'
-                        logging.info('time is over')
-                    break
-
-            if game_end:
-                # Send result to each engine after a claim of such result.
-                for e in eng:
-                    send_command(e['proc'], f'result {gresr}', e['name'])
-                break
-
-            # Game adjudications
-
-            # Resign
-            if (resign_option['movecount'] is not None
-                    and resign_option['score'] is not None):
-                game_endr, gresr, e1scorer = adjudicate_win(
-                    score_history, resign_option, side)
-
-                if game_endr:
-                    gres, e1score = gresr, e1scorer
-                    logging.info('Game ends by resign adjudication.')
-                    break
-
-            # Draw
-            if (draw_option['movenumber'] is not None
-                    and draw_option['movenumber'] is not None
-                    and draw_option['score'] is not None):
-                game_endr, gresr, e1scorer = adjudicate_draw(
-                    score_history, draw_option)
-                if game_endr:
-                    gres, e1score = gresr, e1scorer
-                    logging.info('Game ends by resign adjudication.')
-                    break
-
-            # Time is over
-            if depth_control[side] == 0:
-                game_endr, gresr, e1scorer = time_forfeit(
-                    is_time_over[current_color], current_color, test_engine_color)
-                if game_endr:
-                    gres, e1score = gresr, e1scorer
-                    break
-
-            side = not side
-            current_color = not current_color
-
-        if output_game_file is not None:
-            save_game(lock, output_game_file, fen, move_hist, score_history,
-                      depth_history, eng[0]["name"], eng[1]["name"],
-                      start_turn, gres, termination, variant)
-
-        for i, e in enumerate(eng):
-            send_command(e['proc'], 'quit', e['name'])
-
-        all_e1score.append(e1score)
-
-    return all_e1score
-
-
-def round_match(lock, fen, e1, e2, output_game_file, repeat, draw_option,
-                resign_option, variant) -> List[float]:
-    """
-    Play a match between e1 and e2 using fen as starting position. By default
-    2 games will be played color is reversed.
-    """
-    test_engine_score = []
-
-
-    res = match(lock, e1, e2, fen, output_game_file, variant,
-                draw_option, resign_option, repeat=repeat)
-    test_engine_score.append(res)
-
-    return test_engine_score
-
-
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
@@ -709,36 +746,9 @@ def main():
 
     fens = get_fen_list(fen_file, is_random_startpos)
 
-    # Start match
-    joblist = []
-    test_engine_score_list = []
-    round = args.rounds
-
-    lock = multiprocessing.Manager().Lock()
-
-    # Use Python 3.8 or higher
-    with ProcessPoolExecutor(max_workers=args.concurrency) as executor:
-        for i, fen in enumerate(fens if len(fens) else range(round)):
-            if i >= round:
-                break
-            job = executor.submit(round_match, lock, fen, e1, e2,
-                                  args.pgnout, args.repeat,
-                                  draw_option, resign_option, args.variant)
-            joblist.append(job)
-
-        for future in concurrent.futures.as_completed(joblist):
-            try:
-                test_engine_score = future.result()[0]
-                for s in test_engine_score:
-                    test_engine_score_list.append(s)
-                perf = mean(test_engine_score_list)
-                games = len(test_engine_score_list)
-                print(f'Score of {e1["name"]} vs {e2["name"]}: [{perf}] {games}')
-            except concurrent.futures.process.BrokenProcessPool as ex:
-                print(f'exception: {ex}')
-
-    logging.info(f'final test score: {mean(test_engine_score_list)}')
-    print('Finished match')
+    duel = Duel(e1, e2, fens, args.rounds, args.concurrency, args.pgnout,
+                args.repeat, draw_option, resign_option, args.variant)
+    duel.run()
 
 
 if __name__ == '__main__':
