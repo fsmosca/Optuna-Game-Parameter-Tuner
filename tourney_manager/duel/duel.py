@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.2.0'
+__version__ = 'v1.3.0'
 __credits__ = ['musketeerchess']
 
 
@@ -83,6 +83,8 @@ class Duel:
             f.write(f'[Result "{gres}"]\n')
 
             f.write(f'[Variant "{self.variant}"]\n')
+            if self.variant == 'musketeer':
+                f.write(f'[VariantMen "E:KDA;C:llNrrNDK;A:NB;F:B3DfNbN;M:NR;H:DHAG;S:B2DN;U:CN;D:QN;L:NB2;K:KisO2"]\n')
 
             if termination != '':
                 f.write(f'[Termination "{termination}"]\n')
@@ -98,7 +100,7 @@ class Duel:
                     if start_turn:
                         str_num = f'{num // 2}... '
                     else:
-                        str_num = f'{num // 2}. '
+                        str_num = f'{num // 2 + 1}. '
                 else:
                     num += 1
                     if start_turn:
