@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.4.0'
+__version__ = 'v1.5.0'
 __credits__ = ['musketeerchess']
 
 
@@ -72,6 +72,9 @@ class Duel:
         self.variant = variant
         self.event = event
 
+        self.base_time_sec = 5
+        self.inc_time_sec = 0.05
+
         self.lock = multiprocessing.Manager().Lock()
 
     def save_game(self, fen, moves, scores, depths, e1_name, e2_name,
@@ -88,6 +91,7 @@ class Duel:
             f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
             f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
             f.write(f'[Result "{gres}"]\n')
+            f.write(f'[TimeControl "{self.base_time_sec}+{self.inc_time_sec}"]\n')
 
             f.write(f'[Variant "{self.variant}"]\n')
             if self.variant == 'musketeer':
@@ -200,6 +204,9 @@ class Duel:
                 # Define time control, base time in minutes and inc in seconds.
                 base_minv, base_secv, incv = get_tc(pr['tc'])
                 all_base_sec = base_minv * 60 + base_secv
+
+                self.base_time_sec = all_base_sec
+                self.inc_time_sec = incv
 
                 logging.info(f'base_minv: {base_minv}m, base_secv: {base_secv}s, incv: {incv}s')
 
