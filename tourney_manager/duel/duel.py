@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.6.0'
+__version__ = 'v1.7.0'
 __credits__ = ['musketeerchess']
 
 
@@ -309,7 +309,7 @@ class Duel:
                 if (self.resign_option['movecount'] is not None
                         and self.resign_option['score'] is not None):
                     game_endr, gresr, e1scorer = adjudicate_win(
-                        score_history, self.resign_option, side)
+                        score_history, self.resign_option, start_turn)
 
                     if game_endr:
                         gres, e1score = gresr, e1scorer
@@ -493,11 +493,12 @@ def turn(fen):
     return False
 
 
-def adjudicate_win(score_history, resign_option, side):
+def adjudicate_win(score_history, resign_option, start_turn):
     logging.info('Try adjudicating this game by win ...')
     ret, gres, e1score = False, '*', 0.0
 
     if len(score_history) >= 40:
+        # fcp is the first player to move, can be white or black.
         fcp_score = score_history[0::2]
         scp_score = score_history[1::2]
 
@@ -515,14 +516,12 @@ def adjudicate_win(score_history, resign_option, side):
                 swin_cnt += 1
 
         if fwin_cnt >= movecount:
-            gres = '1-0' if side else '0-1'
+            gres = '1-0' if start_turn else '0-1'
             e1score = 1.0
-            logging.info(f'{"White" if side else "Black"} wins by adjudication.')
             ret = True
         if swin_cnt >= movecount:
-            gres = '1-0' if side else '0-1'
+            gres = '1-0' if not start_turn else '0-1'
             e1score = 0
-            logging.info(f'{"White" if side else "Black"} wins by adjudication.')
             ret = True
 
     return ret, gres, e1score
