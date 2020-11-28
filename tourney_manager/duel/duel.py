@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.7.1'
+__version__ = 'v1.7.2'
 __credits__ = ['musketeerchess']
 
 
@@ -78,16 +78,17 @@ class Duel:
         self.lock = multiprocessing.Manager().Lock()
 
     def save_game(self, fen, moves, scores, depths, e1_name, e2_name,
-                  start_turn, gres, termination=''):
+                  start_turn, gres, termination, round_num, subround):
         self.lock.acquire()
         logging.info('Saving game ...')
         tag_date = datetime.today().strftime('%Y.%m.%d')
+        round_tag_value = f'{round_num}.{subround}'
 
         with open(self.pgnout, 'a') as f:
             f.write(f'[Event "{self.event}"]\n')
             f.write('[Site "Computer"]\n')
             f.write(f'[Date "{tag_date}"]\n')
-            f.write('[Round "?"]\n')
+            f.write(f'[Round "{round_tag_value}"]\n')
             f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
             f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
             f.write(f'[Result "{gres}"]\n')
@@ -131,7 +132,7 @@ class Duel:
 
         self.lock.release()
 
-    def match(self, fen) -> List[float]:
+    def match(self, fen, round_num) -> List[float]:
         """
         Run an engine match between e1 and e2. Save the game and print result
         from e1 perspective.
@@ -139,12 +140,14 @@ class Duel:
         move_hist = []
         all_e1score = []
         is_show_search_info = False
+        subround = 0
 
         # Start engine match, 2 games will be played.
         for gn in range(self.repeat):
             logging.info(f'Match game no. {gn + 1}')
             logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
             e1_folder, e2_folder = Path(self.e1['cmd']).parent, Path(self.e2['cmd']).parent
+            subround += gn + 1
 
             pe1 = subprocess.Popen(self.e1['cmd'], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
@@ -347,7 +350,7 @@ class Duel:
             if self.pgnout is not None:
                 self.save_game(fen, move_hist, score_history,
                           depth_history, eng[0]["name"], eng[1]["name"],
-                          start_turn, gres, termination)
+                          start_turn, gres, termination, round_num, subround)
 
             for i, e in enumerate(eng):
                 send_command(e['proc'], 'quit', e['name'])
@@ -356,14 +359,14 @@ class Duel:
 
         return all_e1score
 
-    def round_match(self, fen) -> List[float]:
+    def round_match(self, fen, round_num) -> List[float]:
         """
         Play a match between e1 and e2 using fen as starting position. By default
         2 games will be played color is reversed.
         """
         test_engine_score = []
 
-        res = self.match(fen)
+        res = self.match(fen, round_num)
         test_engine_score.append(res)
 
         return test_engine_score
@@ -378,7 +381,7 @@ class Duel:
             for i, fen in enumerate(self.fens if len(self.fens) else range(self.rounds)):
                 if i >= self.rounds:
                     break
-                job = executor.submit(self.round_match, fen)
+                job = executor.submit(self.round_match, fen, i+1)
                 joblist.append(job)
 
             for future in concurrent.futures.as_completed(joblist):
