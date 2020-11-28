@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.3.0'
+__version__ = 'v1.4.0'
 __credits__ = ['musketeerchess']
 
 
@@ -25,10 +25,11 @@ import logging
 from statistics import mean
 from typing import List
 import multiprocessing
+from datetime import datetime
 
 
 logging.basicConfig(
-    filename='log_duel.txt', filemode='a',
+    filename='log_duel.txt', filemode='w',
     level=logging.DEBUG,
     format='%(asctime)s - pid%(process)5d - %(levelname)5s - %(message)s')
 
@@ -58,7 +59,7 @@ class Timer:
 
 class Duel:
     def __init__(self, e1, e2, fens, rounds, concurrency, pgnout, repeat, draw_option,
-                 resign_option, variant):
+                 resign_option, variant, event):
         self.e1 = e1
         self.e2 = e2
         self.fens = fens
@@ -69,6 +70,7 @@ class Duel:
         self.draw_option = draw_option
         self.resign_option = resign_option
         self.variant = variant
+        self.event = event
 
         self.lock = multiprocessing.Manager().Lock()
 
@@ -76,8 +78,13 @@ class Duel:
                   start_turn, gres, termination=''):
         self.lock.acquire()
         logging.info('Saving game ...')
+        tag_date = datetime.today().strftime('%Y.%m.%d')
+
         with open(self.pgnout, 'a') as f:
-            f.write('[Event "Optimization test"]\n')
+            f.write(f'[Event "{self.event}"]\n')
+            f.write('[Site "Computer"]\n')
+            f.write(f'[Date "{tag_date}"]\n')
+            f.write('[Round "?"]\n')
             f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
             f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
             f.write(f'[Result "{gres}"]\n')
@@ -679,6 +686,8 @@ def main():
     parser.add_argument('-tournament', required=False, default='round-robin',
                         metavar='tour_type',
                         help='tournament type, default=round-robin')
+    parser.add_argument('-event', required=False, default='Computer Games',
+                        help='Name of event, default=Computer Games')
     parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
 
     args = parser.parse_args()
@@ -749,7 +758,8 @@ def main():
     fens = get_fen_list(fen_file, is_random_startpos)
 
     duel = Duel(e1, e2, fens, args.rounds, args.concurrency, args.pgnout,
-                args.repeat, draw_option, resign_option, args.variant)
+                args.repeat, draw_option, resign_option, args.variant,
+                args.event)
     duel.run()
 
 
