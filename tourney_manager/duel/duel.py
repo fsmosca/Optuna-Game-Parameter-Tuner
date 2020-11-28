@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.5.0'
+__version__ = 'v1.5.1'
 __credits__ = ['musketeerchess']
 
 
@@ -682,9 +682,14 @@ def main():
     parser.add_argument('-variant', required=True, help='name of the variant')
     parser.add_argument('-each', nargs='*', action='append', required=False,
                         metavar=('tc=', 'option.<option_name>='),
-                        help='This option is used to apply to both engnes.\n'
+                        help='This option is used to apply to both engines.\n'
                              'Example where tc is applied to each engine:\n'
-                             '-each tc=1+0.1')
+                             '-each tc=1+0.1\n'
+                             '1 is in minutes and 0.1 is the increment in seconds.\n'
+                             '-each tc=0:30+0.2\n'
+                             '0 is in minutes, 30 is in seconds, 0.2 is increment.\n'
+                             '-each option.PawnValue=100\n'
+                             'PawnValue is the name of the option.')
     parser.add_argument('-openings', nargs='*', action='append',
                         required=False,
                         metavar=('file=', 'format='),
