@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.5.1'
+__version__ = 'v1.6.0'
 __credits__ = ['musketeerchess']
 
 
@@ -433,7 +433,7 @@ def define_engine(engine_option_value):
     return e1, e2
 
 
-def get_fen_list(fn, is_rand=False):
+def get_fen_list(fn, is_rand=True):
     """
     Read fen file and return a list of fens.
     """
@@ -692,9 +692,12 @@ def main():
                              'PawnValue is the name of the option.')
     parser.add_argument('-openings', nargs='*', action='append',
                         required=False,
-                        metavar=('file=', 'format='),
+                        metavar=('file=', 'random='),
                         help='Define start openings. Example:\n'
-                             '-openings file=start.fen format=epd')
+                             '-openings file=start.fen random=false\n'
+                             'default random is true.\n'
+                             'Start opening from move sequences is not supported.\n'
+                             'Only fen and epd format are supported.')
     parser.add_argument('-tournament', required=False, default='round-robin',
                         metavar='tour_type',
                         help='tournament type, default=round-robin')
@@ -743,13 +746,16 @@ def main():
         if e1['depth'] == 0 or e2['depth'] == 0:
             raise Exception('Error! tc or depth are not defined.')
 
-    # Start opening file
-    fen_file = None
+    # Get the opening file and random state settings.
+    fen_file, is_random = None, True
     if args.openings is not None:
         for opt in args.openings:
             for value in opt:
                 if 'file=' in value:
                     fen_file = value.split('=')[1]
+                elif 'random=' in value:
+                    random_value = value.split('=')[1]
+                    is_random = True if random_value.lower() == 'true' else False
 
     draw_option = {'movenumber': None, 'movecount': None, 'score': None}
     if args.draw is not None:
@@ -765,9 +771,7 @@ def main():
             val = int(opt.split('=')[1])
             resign_option.update({key: val})
 
-    is_random_startpos = True
-
-    fens = get_fen_list(fen_file, is_random_startpos)
+    fens = get_fen_list(fen_file, is_random)
 
     duel = Duel(e1, e2, fens, args.rounds, args.concurrency, args.pgnout,
                 args.repeat, draw_option, resign_option, args.variant,
