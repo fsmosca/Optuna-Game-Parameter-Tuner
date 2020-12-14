@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.26.1'
+__version__ = 'v0.27.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -351,7 +351,16 @@ class Objective(object):
         # Options for test engine.
         test_options = ''
         for k, v in self.input_param.items():
-            par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
+            # If input is of float type.
+            try:
+                param_type = v['type']
+            except KeyError:
+                param_type = 'int'
+            if param_type == 'float':
+                par_val = trial.suggest_float(k, v['min'], v['max'], step=v['step'])
+            # Otherwise use integer.
+            else:
+                par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
 
