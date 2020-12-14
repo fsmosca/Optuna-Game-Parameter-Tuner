@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.27.0'
+__version__ = 'v0.27.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -657,7 +657,10 @@ def main():
                              '--input-param \"{\'pawn\': {\'default\': 92,'
                              ' \'min\': 90, \'max\': 120, \'step\': 2},'
                              ' \'knight\': {\'default\': 300, \'min\': 250,'
-                             ' \'max\': 350, \'step\': 2}}\"'
+                             ' \'max\': 350, \'step\': 2}}\"\n'
+                             'Example 3 with 1 parameter but float value:\n'
+                             '--input-param \"{\'CPuct\': {\'default\': 0.5,'
+                             ' \'min\': 0.1, \'max\': 3.0, \'step\': 0.05, \'type\': \'float\'}}\"'
                         )
     parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
     parser.add_argument('--common-param', required=False, type=str,
