@@ -85,6 +85,12 @@ See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in 
 python tuner.py --engine ./engines/deuterium/deuterium --hash 128 --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}, 'BishopValueEn': {'default':350, 'min':290, 'max':350, 'step':3}, 'RookValueEn': {'default':525, 'min':480, 'max':550, 'step':5}, 'QueenValueOp': {'default':985, 'min':950, 'max':1200, 'step':5}}" --initial-best-value 0.54 --games-per-trial 200 --plot --base-time-sec 120 --inc-time-sec 0.1 --depth 4 --study-name pv_d4_eisample_50_pruner --pgn-output train_pv_d4_eisamples_50_pruner.pgn --trials 200 --threshold-pruner result=0.35 --sampler name=skopt acquisition_function=LCB
 ```
 
+#### Command line with float parameter values
+Add a key value pair of `'type': 'float'`
+```python
+--input-param "{'CPuct': {'default':2.147, 'min':1.0, 'max':3.0, 'step':0.05, 'type': 'float'}, 'CPuctBase': {'default':18368.0, 'min':15000.0, 'max':20000.0, 'step':2.0, 'type': 'float'}, 'CPuctFactor': {'default':2.82, 'min':0.5, 'max':3.5, 'step':0.05, 'type': 'float'}, 'FpuValue': {'default':0.443, 'min':-0.1, 'max':1.2, 'step':0.05, 'type': 'float'}, 'PolicyTemperature': {'default':1.61, 'min':0.5, 'max':3.0, 'step':0.05, 'type': 'float'}}"
+```
+
 
 ## G. Optimization studies
 
