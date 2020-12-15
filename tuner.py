@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.27.1'
+__version__ = 'v0.28.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -62,7 +62,7 @@ class Objective(object):
                  init_param, init_value, variant, opening_file,
                  opening_format, old_trial_num, pgnout, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16, concurrency=1,
-                 proto='uci', hashmb=64, fix_base_param=False,
+                 proto='uci', fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
                  threshold_pruner={}, common_param=None):
@@ -95,7 +95,6 @@ class Objective(object):
 
         self.trial_num = old_trial_num
         self.proto = proto
-        self.hashmb = hashmb
 
         # Todo: Improve inc_factor, 64 can relate to number of trials.
         self.inc_factor = 1/64
@@ -161,8 +160,8 @@ class Objective(object):
                 command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
                 command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
             else:
-                command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto} option.Hash={self.hashmb}'
-                command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto} option.Hash={self.hashmb}'
+                command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
+                command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
         else:
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options} depth={self.depth}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} depth={self.depth}'
@@ -548,8 +547,6 @@ def main():
         epilog='%(prog)s')
     parser.add_argument('--engine', required=True,
                         help='Engine filename or engine path and filename.')
-    parser.add_argument('--hash', required=False, type=int,
-                        help='Engine memory in MB, default=64.', default=64)
     parser.add_argument('--trials', required=False, type=int,
                         help='Trials to try, default=1000.',
                         default=1000)
@@ -770,7 +767,7 @@ def main():
                                  args.opening_format, old_trial_num,
                                  args.pgn_output, args.base_time_sec,
                                  args.inc_time_sec, rounds, args.concurrency,
-                                 args.protocol, args.hash, fix_base_param,
+                                 args.protocol, fix_base_param,
                                  args.match_manager, good_result_cnt,
                                  args.depth, games_per_trial, th_pruner,
                                  common_param),
