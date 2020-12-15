@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.28.0'
+__version__ = 'v0.29.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -60,9 +60,9 @@ DEFAULT_SEARCH_DEPTH = 1000
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_value,
                  init_param, init_value, variant, opening_file,
-                 opening_format, old_trial_num, pgnout, base_time_sec=5,
-                 inc_time_sec=0.05, rounds=16, concurrency=1,
-                 proto='uci', fix_base_param=False,
+                 opening_format, old_trial_num, pgnout, nodes,
+                 base_time_sec=5, inc_time_sec=0.05, rounds=16,
+                 concurrency=1, proto='uci', fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
                  threshold_pruner={}, common_param=None):
@@ -85,6 +85,7 @@ class Objective(object):
         self.opening_file = opening_file
         self.opening_format = opening_format
         self.pgnout = pgnout
+        self.nodes = nodes
 
         self.base_time_sec = base_time_sec
         self.inc_time_sec = inc_time_sec
@@ -156,12 +157,8 @@ class Objective(object):
         command = f' -concurrency {self.concurrency}'
 
         if self.match_manager == 'cutechess':
-            if self.proto == 'xboard':
-                command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
-                command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
-            else:
-                command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
-                command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
         else:
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options} depth={self.depth}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} depth={self.depth}'
@@ -174,7 +171,11 @@ class Objective(object):
         if self.match_manager == 'cutechess':
             command += ' -recover'
             command += f' -rounds {games//2} -games 2 -repeat 2'
-            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
+
+            if self.nodes is None:
+                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
+            else:
+                command += f' -each tc=inf nodes={self.nodes}'
         else:
             command += f' -rounds {games//2} -repeat 2'
             command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
@@ -576,6 +577,12 @@ def main():
                              ' control.\n'
                              'tuner.py --depth 24 --base-time-sec 300 ...',
                         default=1000)
+    parser.add_argument('--nodes', required=False, type=int,
+                        help='The maximum search nodes that the engine is'
+                             ' allowed.\n'
+                             'Example:\n'
+                             'python tuner.py --nodes 1000 ...\n'
+                             'Time and depth control will not be followed.')
     parser.add_argument('--opening-file', required=True, type=str,
                         help='Start opening filename in pgn, fen or epd format.\n'
                              'If match manager is cutechess, you can use pgn, fen\n'
@@ -765,8 +772,9 @@ def main():
                                  best_value, init_param, init_value,
                                  args.variant, args.opening_file,
                                  args.opening_format, old_trial_num,
-                                 args.pgn_output, args.base_time_sec,
-                                 args.inc_time_sec, rounds, args.concurrency,
+                                 args.pgn_output, args.nodes,
+                                 args.base_time_sec, args.inc_time_sec,
+                                 rounds, args.concurrency,
                                  args.protocol, fix_base_param,
                                  args.match_manager, good_result_cnt,
                                  args.depth, games_per_trial, th_pruner,
