@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.29.0'
+__version__ = 'v0.29.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -159,6 +159,7 @@ class Objective(object):
         if self.match_manager == 'cutechess':
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
+            command += ' -wait 100'
         else:
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options} depth={self.depth}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} depth={self.depth}'
