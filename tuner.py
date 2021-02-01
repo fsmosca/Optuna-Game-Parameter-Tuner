@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.29.1'
+__version__ = 'v0.29.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -395,12 +395,12 @@ class Objective(object):
         # Log info to console.
         logger.info(f'suggested param for test engine: {self.test_param}')
         if self.fix_base_param:
-            logger.info(f'param for base engine          : {self.init_param}\n')
+            logger.info(f'param for base engine          : {self.init_param}')
         else:
             if self.best_value > self.init_value:
-                logger.info(f'param for base engine          : {self.best_param}\n')
+                logger.info(f'param for base engine          : {self.best_param}')
             else:
-                logger.info(f'param for base engine          : {self.init_param}\n')
+                logger.info(f'param for base engine          : {self.init_param}')
 
         if self.common_param is not None:
             logger.info(f'common param: {self.common_param}')
@@ -408,7 +408,7 @@ class Objective(object):
         logger.info(f'init param: {self.init_param}')
         logger.info(f'init value: {self.init_value}')
         logger.info(f'study best param: {self.best_param}')
-        logger.info(f'study best value: {self.best_value}\n')
+        logger.info(f'study best value: {self.best_value}')
 
         # Run engine vs engine match.
         if (len(self.threshold_pruner)
@@ -447,13 +447,13 @@ class Objective(object):
         else:
             result = self.engine_match(test_options, base_options, self.games_per_trial)
 
-        logger.info(f'Actual match result: {result}, point of view: optimizer suggested values\n')
+        logger.info(f'Actual match result: {result}, point of view: optimizer suggested values')
 
         # Output for match manager.
         test_param = ''
         for k, v in self.test_param.items():
             test_param += f'option.{k}={v} '
-        logger.info(f'test param: {test_param}\n')
+        logger.info(f'test param: {test_param}')
 
         # If base engine always uses the initial param or default param.
         if self.fix_base_param:
