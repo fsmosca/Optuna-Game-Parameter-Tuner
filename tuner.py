@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.29.2'
+__version__ = 'v0.30.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -65,7 +65,8 @@ class Objective(object):
                  concurrency=1, proto='uci', fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
-                 threshold_pruner={}, common_param=None):
+                 threshold_pruner={}, common_param=None,
+                 resign_movecount=None, resign_score=None):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -116,6 +117,8 @@ class Objective(object):
             self.proto = 'xboard'
 
         self.common_param = common_param
+        self.resign_movecount = resign_movecount
+        self.resign_score = resign_score
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -183,10 +186,14 @@ class Objective(object):
 
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
-            command += ' -resign movecount=6 score=700 twosided=true'
             command += ' -draw movenumber=30 movecount=6 score=5'
         else:
             command += f' -openings file={self.opening_file}'
+
+        if self.resign_movecount is not None and self.resign_score is not None:
+            command += f' -resign movecount={self.resign_movecount} score={self.resign_score}'
+            if self.match_manager == 'cutechess':
+                command += f' twosided=true'
 
         command += f' -pgnout {self.pgnout}'
 
@@ -549,6 +556,14 @@ def main():
         epilog='%(prog)s')
     parser.add_argument('--engine', required=True,
                         help='Engine filename or engine path and filename.')
+    parser.add_argument('--resign-movecount', required=False,
+                        help='Number of move counts before the game is adjudicated as a loss.\n'
+                             'This should be used together with --resign-score option. Example:\n'
+                             '--resign-movecount 10 --resign-score 700\n'
+                             'Will terminate the game when there are 10 successive -700 or worse score.')
+    parser.add_argument('--resign-score', required=False,
+                        help='Score is centipawn where the game is considered resignable.\n'
+                             'This should be used together with --resign-movecount option.')
     parser.add_argument('--trials', required=False, type=int,
                         help='Trials to try, default=1000.',
                         default=1000)
@@ -779,7 +794,8 @@ def main():
                                  args.protocol, fix_base_param,
                                  args.match_manager, good_result_cnt,
                                  args.depth, games_per_trial, th_pruner,
-                                 common_param),
+                                 common_param, args.resign_movecount,
+                                 args.resign_score),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
