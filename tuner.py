@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.30.0'
+__version__ = 'v0.31.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -25,6 +25,7 @@ from typing import List
 import logging
 
 import optuna
+from optuna.distributions import IntUniformDistribution, DiscreteUniformDistribution
 
 
 logging.basicConfig(
@@ -354,7 +355,7 @@ class Objective(object):
 
     def __call__(self, trial):
         logger.info('')
-        logger.info(f'starting trial: {self.trial_num} ...')
+        logger.info(f'starting trial: {trial.number} ...')
 
         # Options for test engine.
         test_options = ''
@@ -781,6 +782,28 @@ def main():
             for index, row in df.iterrows():
                 if row['value'] > init_value and row['state'] == 'COMPLETE':
                     good_result_cnt += 1
+
+        # If there is no trial recorded yet we will initialize our study
+        # with default values from the engine.
+        if not is_study:
+            distri = {}
+            init_trial_value = init_value
+
+            for k, v in input_param.items():
+                if 'type' in v and v['type'] == 'float':
+                    distri.update({k: DiscreteUniformDistribution(v['min'], v['max'], v['step'])})
+                else:
+                    distri.update({k: IntUniformDistribution(v['min'], v['max'], v['step'])})
+
+            init_trial = optuna.trial.create_trial(
+                params=copy.deepcopy(init_param),
+                distributions=copy.deepcopy(distri),
+                value=init_trial_value,
+            )
+            study.add_trial(init_trial)
+
+            best_param = study.best_params
+            best_value = study.best_value
 
         # Begin param optimization.
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
