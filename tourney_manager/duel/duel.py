@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.7.2'
+__version__ = 'v1.8.0'
 __credits__ = ['musketeerchess']
 
 
@@ -126,6 +126,7 @@ class Duel:
                     f.write(f'{str_num}{m} {{{s}/{d}}} {gres}')
                 else:
                     f.write(f'{str_num}{m} {{{s}/{d}}} ')
+
                 if (i + 1) % 5 == 0:
                     f.write('\n')
             f.write('\n\n')
@@ -261,7 +262,6 @@ class Duel:
                 if num == 0:
                     send_command(eng[side]['proc'], 'go', eng[side]['name'])
                 else:
-                    move_hist.append(move)
                     send_command(eng[side]['proc'], f'{move}', eng[side]['name'])
 
                     # Send another go because of force.
@@ -297,6 +297,7 @@ class Duel:
                         elapse_history.append(elapse)
 
                         move = line.split('move ')[1]
+                        move_hist.append(move)
                         score_history.append(score if score is not None else 0)
                         depth_history.append(depth if depth is not None else 0)
 
@@ -318,7 +319,7 @@ class Duel:
                 if (self.resign_option['movecount'] is not None
                         and self.resign_option['score'] is not None):
                     game_endr, gresr, e1scorer = adjudicate_win(
-                        score_history, self.resign_option, start_turn)
+                        test_engine_color, score_history, self.resign_option, start_turn)
 
                     if game_endr:
                         gres, e1score = gresr, e1scorer
@@ -502,7 +503,7 @@ def turn(fen):
     return False
 
 
-def adjudicate_win(score_history, resign_option, start_turn):
+def adjudicate_win(test_engine_color, score_history, resign_option, start_turn):
     logging.info('Try adjudicating this game by win ...')
     ret, gres, e1score = False, '*', 0.0
 
@@ -512,25 +513,38 @@ def adjudicate_win(score_history, resign_option, start_turn):
         scp_score = score_history[1::2]
 
         fwin_cnt, swin_cnt = 0, 0
-        movecount = resign_option['movecount'] * 2
+        movecount = resign_option['movecount']
         score = resign_option['score']
 
         for i, (fs, ss) in enumerate(zip(reversed(fcp_score),
                                          reversed(scp_score))):
             if i >= movecount:
                 break
-            if i <= movecount and fs >= score and ss <= -score:
+
+            if fs >= score and ss <= -score:
                 fwin_cnt += 1
-            elif i <= movecount and fs <= -score and ss >= score:
+                if fwin_cnt >= movecount:
+                    break
+
+            elif fs <= -score and ss >= score:
                 swin_cnt += 1
+                if swin_cnt >= movecount:
+                    break
 
         if fwin_cnt >= movecount:
             gres = '1-0' if start_turn else '0-1'
-            e1score = 1.0
+            if gres == '1-0':
+                e1score = 1.0 if test_engine_color else 0
+            else:
+                e1score = 1.0 if not test_engine_color else 0
             ret = True
-        if swin_cnt >= movecount:
+        elif swin_cnt >= movecount:
+            # The second player won and is playing white.
             gres = '1-0' if not start_turn else '0-1'
-            e1score = 0
+            if gres == '1-0':
+                e1score = 1.0 if test_engine_color else 0
+            else:
+                e1score = 1.0 if not test_engine_color else 0
             ret = True
 
     return ret, gres, e1score
@@ -552,8 +566,7 @@ def adjudicate_draw(score_history, draw_option):
                                          reversed(scp_score))):
             if i >= movecount:
                 break
-            if (i <= movecount and abs(fs) <= score
-                    and abs(ss) <= score):
+            if abs(fs) <= score and abs(ss) <= score:
                 draw_cnt += 1
 
         if draw_cnt >= movecount:
