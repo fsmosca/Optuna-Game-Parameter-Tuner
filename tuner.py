@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.32.0'
+__version__ = 'v0.33.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -191,10 +191,10 @@ class Objective(object):
         else:
             command += f' -openings file={self.opening_file}'
 
-        if (self.resign_movecount is not None and
-            self.resign_score is not None and
-            self.match_manager == 'cutechess'):
-            command += f' -resign movecount={self.resign_movecount} score={self.resign_score} twosided=true'
+        if self.resign_movecount is not None and self.resign_score is not None:
+            command += f' -resign movecount={self.resign_movecount} score={self.resign_score}'
+            if self.match_manager == 'cutechess':
+                command += f' twosided=true'
 
         command += f' -pgnout {self.pgnout}'
 
