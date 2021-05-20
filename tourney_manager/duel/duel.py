@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.8.0'
+__version__ = 'v1.8.1'
 __credits__ = ['musketeerchess']
 
 
@@ -392,7 +392,7 @@ class Duel:
                         test_engine_score_list.append(s)
                     perf = mean(test_engine_score_list)
                     games = len(test_engine_score_list)
-                    print(f'Score of {self.e1["name"]} vs {self.e2["name"]}: [{perf}] {games}')
+                    print(f'Score of {self.e1["name"]} vs {self.e2["name"]}: [{perf:0.8f}] {games}')
                 except concurrent.futures.process.BrokenProcessPool as ex:
                     print(f'exception: {ex}')
 
