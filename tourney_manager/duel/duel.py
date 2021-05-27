@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.8.1'
+__version__ = 'v1.9.0'
 __credits__ = ['musketeerchess']
 
 
@@ -559,7 +559,7 @@ def adjudicate_draw(score_history, draw_option):
         scp_score = score_history[1::2]
 
         draw_cnt = 0
-        movecount = draw_option['movecount'] * 2
+        movecount = draw_option['movecount']
         score = draw_option['score']
 
         for i, (fs, ss) in enumerate(zip(reversed(fcp_score),
