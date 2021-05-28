@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.33.0'
+__version__ = 'v0.34.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -67,7 +67,8 @@ class Objective(object):
                  match_manager='cutechess', good_result_cnt=0,
                  depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
-                 resign_movecount=None, resign_score=None):
+                 resign_movecount=None, resign_score=None,
+                 draw_movenumber=None, draw_movecount=6, draw_score=0):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -120,6 +121,9 @@ class Objective(object):
         self.common_param = common_param
         self.resign_movecount = resign_movecount
         self.resign_score = resign_score
+        self.draw_movenumber = draw_movenumber
+        self.draw_movecount = draw_movecount
+        self.draw_score = draw_score
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -187,9 +191,12 @@ class Objective(object):
 
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
-            command += ' -draw movenumber=30 movecount=6 score=5'
         else:
             command += f' -openings file={self.opening_file}'
+
+        # draw adjudication
+        if self.draw_movenumber is not None:
+            command += f' -draw movenumber={self.draw_movenumber} movecount={self.draw_movecount} score={self.draw_score}'
 
         if self.resign_movecount is not None and self.resign_score is not None:
             command += f' -resign movecount={self.resign_movecount} score={self.resign_score}'
@@ -414,9 +421,9 @@ class Objective(object):
             logger.info(f'common param: {self.common_param}')
 
         logger.info(f'init param: {self.init_param}')
-        logger.info(f'init value: {self.init_value}')
+        logger.info(f'init objective value: {self.init_value}')
         logger.info(f'study best param: {self.best_param}')
-        logger.info(f'study best value: {self.best_value}')
+        logger.info(f'study best objective value: {self.best_value}')
 
         # Run engine vs engine match.
         if (len(self.threshold_pruner)
@@ -557,6 +564,21 @@ def main():
         epilog='%(prog)s')
     parser.add_argument('--engine', required=True,
                         help='Engine filename or engine path and filename.')
+    parser.add_argument('--draw-movenumber', required=False,
+                        help='Number of moves reached before applying the draw adjudication.\n'
+                             'If not specified then draw adjudication will be disabled.\n'
+                             'This should be used together with --draw-movecount and --draw-score. Example:\n'
+                             '--draw-movenumber 40 --draw-movecount 6 --draw-score 0.')
+    parser.add_argument('--draw-movecount', required=False,
+                        help='Number of move count reached before applying the draw adjudication, default=6.\n'
+                             'This should be used together with --draw-movenumber and --draw-score. Example:\n'
+                             '--draw-movenumber 40 --draw-movecount 6 --draw-score 0.',
+                        default=6)
+    parser.add_argument('--draw-score', required=False,
+                        help='Score is in cp, default=0.\n'
+                             'This should be used together with --draw-movenumber and --draw-movecount. Example:\n'
+                             '--draw-movenumber 40 --draw-movecount 6 --draw-score 0.',
+                        default=0)
     parser.add_argument('--resign-movecount', required=False,
                         help='Number of move counts before the game is adjudicated as a loss.\n'
                              'This should be used together with --resign-score option. Example:\n'
@@ -762,7 +784,7 @@ def main():
         except:
             logger.exception('Unexpected error:', sys.exc_info()[0])
             raise
-        logger.info(f'study best value: {best_value}')
+        logger.info(f'study best objective value: {best_value}')
 
         # Get the best param values from previous study session.
         try:
@@ -802,6 +824,8 @@ def main():
             )
             study.add_trial(init_trial)
 
+            logger.info(f"added trial: yes, params: {init_trial.params}, objective value: {init_trial.values[0]}")
+
             best_param = study.best_params
             best_value = study.best_value
 
@@ -818,7 +842,8 @@ def main():
                                  args.match_manager, good_result_cnt,
                                  args.depth, games_per_trial, th_pruner,
                                  common_param, args.resign_movecount,
-                                 args.resign_score),
+                                 args.resign_score, args.draw_movenumber,
+                                 args.draw_movecount, args.draw_score),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
@@ -833,7 +858,7 @@ def main():
 
         # Show the best param, value and trial number.
         logger.info(f'study best param: {study.best_params}')
-        logger.info(f'study best value: {study.best_value}')
+        logger.info(f'study best objective value: {study.best_value}')
         logger.info(f'study best trial number: {study.best_trial.number}\n')
 
         # Output for match manager.
