@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.9.0'
+__version__ = 'v1.9.1'
 __credits__ = ['musketeerchess']
 
 
@@ -365,12 +365,7 @@ class Duel:
         Play a match between e1 and e2 using fen as starting position. By default
         2 games will be played color is reversed.
         """
-        test_engine_score = []
-
-        res = self.match(fen, round_num)
-        test_engine_score.append(res)
-
-        return test_engine_score
+        return self.match(fen, round_num)
 
     def run(self):
         """Start the match."""
@@ -387,7 +382,7 @@ class Duel:
 
             for future in concurrent.futures.as_completed(joblist):
                 try:
-                    test_engine_score = future.result()[0]
+                    test_engine_score = future.result()
                     for s in test_engine_score:
                         test_engine_score_list.append(s)
                     perf = mean(test_engine_score_list)
