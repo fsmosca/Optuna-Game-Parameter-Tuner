@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.9.1'
+__version__ = 'v1.9.2'
 __credits__ = ['musketeerchess']
 
 
@@ -242,7 +242,7 @@ class Duel:
             num, side, move, line, game_end = 0, 0, None, '', False
             score_history, elapse_history, depth_history = [], [], []
             start_turn = turn(fen) if not isinstance(fen, int) else True
-            gres, e1score = '*', 0.0
+            gres, gresr, e1score = '*', '*', 0.0
             is_time_over = [False, False]
             current_color = start_turn  # True if white to move
 
@@ -350,8 +350,8 @@ class Duel:
 
             if self.pgnout is not None:
                 self.save_game(fen, move_hist, score_history,
-                          depth_history, eng[0]["name"], eng[1]["name"],
-                          start_turn, gres, termination, round_num, subround)
+                               depth_history, eng[0]["name"], eng[1]["name"],
+                               start_turn, gres, termination, round_num, subround)
 
             for i, e in enumerate(eng):
                 send_command(e['proc'], 'quit', e['name'])
