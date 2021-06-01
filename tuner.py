@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.34.1'
+__version__ = 'v0.35.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -21,7 +21,7 @@ from collections import OrderedDict
 import argparse
 from pathlib import Path
 import ast
-from typing import List
+from typing import List, Union
 import logging
 
 import optuna
@@ -55,17 +55,15 @@ except ModuleNotFoundError:
     logger.info('Warning! pandas is not installed.')
 
 
-DEFAULT_SEARCH_DEPTH = 1000
-
-
 class Objective(object):
     def __init__(self, engine, input_param, best_param, best_value,
                  init_param, init_value, variant, opening_file,
-                 opening_format, old_trial_num, pgnout, nodes,
-                 base_time_sec=5, inc_time_sec=0.05, rounds=16,
+                 opening_format, old_trial_num, pgnout,
+                 nodes: Union[None, int]=None, base_time_sec=5,
+                 inc_time_sec=0.05, rounds=16,
                  concurrency=1, proto='uci', fix_base_param=False,
                  match_manager='cutechess', good_result_cnt=0,
-                 depth=DEFAULT_SEARCH_DEPTH, games_per_trial=32,
+                 depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0):
@@ -110,10 +108,6 @@ class Objective(object):
 
         self.startup_trials = 10
         self.threshold_pruner = copy.deepcopy(threshold_pruner)
-
-        # Adjust depth for duel.py since its default depth is 0.
-        if self.match_manager == 'duel' and self.depth == DEFAULT_SEARCH_DEPTH:
-            self.depth = 0
 
         if self.match_manager == 'cutechess' and self.proto == 'cecp':
             self.proto = 'xboard'
@@ -169,8 +163,8 @@ class Objective(object):
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
             command += ' -wait 100'
         else:
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} depth={self.depth}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} depth={self.depth}'
+            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
+            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
 
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
@@ -181,13 +175,19 @@ class Objective(object):
             command += ' -recover'
             command += f' -rounds {games//2} -games 2 -repeat 2'
 
-            if self.nodes is None:
-                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec} depth={self.depth}'
-            else:
+            if self.depth is not None:
+                command += f' -each tc=inf depth={self.depth}'
+            elif self.nodes is not None:
                 command += f' -each tc=inf nodes={self.nodes}'
+            else:
+                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
+        # duel.py match manager
         else:
             command += f' -rounds {games//2} -repeat 2'
-            command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
+            if self.depth is not None:
+                command += f' -each tc=inf depth={self.depth}'
+            else:
+                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
@@ -609,21 +609,10 @@ def main():
                         help='Increment time in sec for time control, default=0.05.',
                         default=0.05)
     parser.add_argument('--depth', required=False, type=int,
-                        help='The maximum search depth that the engine is'
-                             ' allowed, default=1000.\n'
-                             'Example:\n'
-                             'python tuner.py --depth 6 ...\n'
-                             'If depth is high say 24 and you want this depth\n'
-                             'to be always respected increase the base time'
-                             ' control.\n'
-                             'tuner.py --depth 24 --base-time-sec 300 ...',
-                        default=1000)
+                        help='The maximum depth that the engine is allowed to search.')
     parser.add_argument('--nodes', required=False, type=int,
-                        help='The maximum search nodes that the engine is'
-                             ' allowed.\n'
-                             'Example:\n'
-                             'python tuner.py --nodes 1000 ...\n'
-                             'Time and depth control will not be followed.')
+                        help='The maximum nodes that the engine is allowed to search.\n'
+                             'This is only applicable to cutechess match manager.')
     parser.add_argument('--opening-file', required=True, type=str,
                         help='Start opening filename in pgn, fen or epd format.\n'
                              'If match manager is cutechess, you can use pgn, fen\n'
