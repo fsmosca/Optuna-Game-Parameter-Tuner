@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.9.2'
+__version__ = 'v1.13.0'
 __credits__ = ['musketeerchess']
 
 
@@ -42,6 +42,8 @@ class Timer:
         self.base_time = base_time
         self.inc_time = inc_time
         self.rem_time = self.base_time + self.inc_time
+        self.init_base_time = base_time
+        self.init_inc_time = inc_time
 
     def update(self, elapse):
         """
@@ -221,7 +223,10 @@ class Duel:
                 logging.info(f'base_minv: {base_minv}m, base_secv: {base_secv}s, incv: {incv}s')
 
                 # Send level command to each engine.
-                tbase = max(1, all_base_sec // 60)
+                if pr['depth'] > 0:
+                    tbase = 300
+                else:
+                    tbase = max(1, all_base_sec // 60)
                 send_command(e, f'level 0 {tbase} {float(incv):0.2f}', pn)
 
                 # Setup Timer, convert base time to ms and inc in sec to ms
@@ -281,9 +286,14 @@ class Duel:
                             print(line)
 
                     # Save score and depth from engine search info.
-                    if line.split()[0].isdigit():
-                        score = int(line.split()[1])  # cp
-                        depth = int(line.split()[0])
+                    try:
+                        value_at_index_0 = line.split()[0]
+                    except IndexError:
+                        pass
+                    else:
+                        if value_at_index_0.isdigit():
+                            score = int(line.split()[1])  # cp
+                            depth = int(line.split()[0])
 
                     # Check end of game as claimed by engines.
                     game_endr, gresr, e1scorer, termi = is_game_end(line, test_engine_color)
@@ -301,7 +311,8 @@ class Duel:
                         score_history.append(score if score is not None else 0)
                         depth_history.append(depth if depth is not None else 0)
 
-                        if timer[side].is_zero_time():
+                        if (timer[side].init_base_time + timer[side].init_inc_time > 0
+                                and timer[side].is_zero_time()):
                             is_time_over[current_color] = True
                             termination = 'forfeits on time'
                             logging.info('time is over')
@@ -460,12 +471,15 @@ def get_fen_list(fn, is_rand=True):
 
 def get_tc(tcd):
     """
-    tc=0/3+1 or 3+1, blitz 3m + 1s inc
+    tc=0/3+1 or 3+1, blitz 3s + 1s inc
+    tc=0/3:1+1 or 3:1+1, blitz 3m + 1s with 1s inc
     tc=0/0:5+0.1 or 0:5+0.1, blitz 0m + 5s + 0.1s inc
     """
     base_minv, base_secv, inc_secv = 0, 0, 0.0
 
-    if tcd == '':
+    logging.info(f'tc value: {tcd}')
+
+    if tcd == '' or tcd == 'inf':
         return base_minv, base_secv, inc_secv
 
     # Check base time with minv:secv format.
@@ -478,12 +492,18 @@ def get_tc(tcd):
         base_minv = int(basev.split(':')[0])
         base_secv = int(basev.split(':')[1])
     else:
-        base_minv = int(basev)
+        base_secv = int(basev)
 
     if '/' in tcd:
-        inc_secv = float(tcd.split('/')[1].split('+')[1].strip())
+        # 0/0:5+None
+        inc_value = tcd.split('/')[1].split('+')[1].strip()
+        if inc_value != 'None':
+            inc_secv = float(inc_value)
     else:
-        inc_secv = float(tcd.split('+')[1].strip())
+        # 0:5+None
+        inc_value = tcd.split('+')[1].strip()
+        if inc_value != 'None':
+            inc_secv = float(inc_value)
 
     return base_minv, base_secv, inc_secv
 
@@ -701,11 +721,13 @@ def main():
                         help='This option is used to apply to both engines.\n'
                              'Example where tc is applied to each engine:\n'
                              '-each tc=1+0.1\n'
-                             '1 is in minutes and 0.1 is the increment in seconds.\n'
+                             '1 is in sec and 0.1 is the increment in sec.\n'
                              '-each tc=0:30+0.2\n'
-                             '0 is in minutes, 30 is in seconds, 0.2 is increment.\n'
+                             '0 is in min, 30 is in sec, 0.2 is the increment in sec.\n'
                              '-each option.PawnValue=100\n'
-                             'PawnValue is the name of the option.')
+                             'PawnValue is the name of the option. Or\n'
+                             '-each tc=inf depth=4\n'
+                             'to set the depth to 4.')
     parser.add_argument('-openings', nargs='*', action='append',
                         required=False,
                         metavar=('file=', 'random='),
