@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.35.0'
+__version__ = 'v0.36.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -249,7 +249,7 @@ class Objective(object):
             return optuna.samplers.TPESampler()
 
         if name == 'tpe':
-            ei_samples, multivariate = 24, False
+            ei_samples, multivariate, group = 24, False, False
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
             for opt in args_sampler:
                 for value in opt:
@@ -259,8 +259,12 @@ class Objective(object):
                     elif 'multivariate=' in value:
                         multivariate = True if value.split('=')[1].lower() == 'true' else False
                         logger.info(f'tpe multivariate={multivariate}')
+
+            group = True if multivariate else False
+
             return optuna.samplers.TPESampler(n_ei_candidates=ei_samples,
-                                              multivariate=multivariate)
+                                              multivariate=multivariate,
+                                              group=group)
 
         if name == 'cmaes':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
