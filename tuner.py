@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.36.0'
+__version__ = 'v0.37.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -268,7 +268,7 @@ class Objective(object):
 
         if name == 'cmaes':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#
-            return optuna.samplers.CmaEsSampler()
+            return optuna.integration.PyCmaSampler()
 
         if name == 'skopt':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
