@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.13.0'
+__version__ = 'v1.14.0'
 __credits__ = ['musketeerchess']
 
 
@@ -140,7 +140,6 @@ class Duel:
         Run an engine match between e1 and e2. Save the game and print result
         from e1 perspective.
         """
-        move_hist = []
         all_e1score = []
         is_show_search_info = False
         subround = 0
@@ -150,7 +149,7 @@ class Duel:
             logging.info(f'Match game no. {gn + 1}')
             logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
             e1_folder, e2_folder = Path(self.e1['cmd']).parent, Path(self.e2['cmd']).parent
-            subround += gn + 1
+            subround = gn + 1
 
             pe1 = subprocess.Popen(self.e1['cmd'], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
@@ -245,7 +244,7 @@ class Duel:
                         break
 
             num, side, move, line, game_end = 0, 0, None, '', False
-            score_history, elapse_history, depth_history = [], [], []
+            score_history, elapse_history, depth_history, move_hist = [], [], [], []
             start_turn = turn(fen) if not isinstance(fen, int) else True
             gres, gresr, e1score = '*', '*', 0.0
             is_time_over = [False, False]
