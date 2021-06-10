@@ -39,10 +39,10 @@ __script_name__ = 'filter'
 
 def main():
     # Change here, be sure to remove the dupes in the input file, use deduplicator.py
-    infn = 'au_random_startpos.fen'
-    filter = ['A', 'U', 'a', 'u']
+    infn = 'archbishop_chancellor_random_startpos.fen'
+    filter = ['A', 'M', 'a', 'm']
 
-    outfn = 'out.fen'
+    outfn = f'out_{infn}'
     total_lines = 0
     saved_lines = 0
 
