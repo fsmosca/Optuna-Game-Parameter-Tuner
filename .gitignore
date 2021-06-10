@@ -140,3 +140,7 @@ dmypy.json
 # Repo
 *.png
 *.csv
+*.exe
+*.bat
+*.fen
+*.txt
