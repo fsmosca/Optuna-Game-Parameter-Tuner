@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.37.1'
+__version__ = 'v0.38.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -267,8 +267,14 @@ class Objective(object):
                                               group=group)
 
         if name == 'cmaes':
+            sigma0 = None  # initial std. deviation
+            for opt in args_sampler:
+                for value in opt:
+                    if 'sigma0=' in value:
+                        sigma0 = float(value.split('=')[1])
+
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html
-            return optuna.integration.PyCmaSampler()
+            return optuna.integration.PyCmaSampler(sigma0=sigma0)
 
         if name == 'skopt':
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
@@ -657,7 +663,10 @@ def main():
                              '  default ei_samples=24\n'
                              '--sampler name=tpe multivariate=true ...\n'
                              '  default multivariate is false.\n'
-                             '--sampler name=cmaes ...\n'
+                             '--sampler name=cmaes sigma0=20 ...\n'
+                             '  default sigma0 or initial std deviation is None. This tells cmaes that optimal parameter values\n'
+                             '  lies within init_value +/- 3 * sigma0. By default this value is the parameter minimum_range/6.\n'
+                             '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html\n'
                              '--sampler name=skopt acquisition_function=LCB ...\n'
                              '  default acquisition_function=gp_hedge\n'
                              '  Can be LCB or EI or PI or gp_hedge\n'
