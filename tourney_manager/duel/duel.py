@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.14.0'
+__version__ = 'v1.15.0'
 __credits__ = ['musketeerchess']
 
 
@@ -104,11 +104,13 @@ class Duel:
                 f.write(f'[Termination "{termination}"]\n')
 
             if not isinstance(fen, int):
-                f.write(f'[FEN "{fen}"]\n\n')
+                f.write(f'[FEN "{fen}"]\n')
             else:
                 f.write('\n')
 
             move_len = len(moves)
+
+            f.write(f'[PlyCount "{move_len}"]\n\n')
 
             for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
                 num = i + 1
