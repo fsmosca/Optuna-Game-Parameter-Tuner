@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.38.0'
+__version__ = 'v0.39.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -283,6 +283,7 @@ class Objective(object):
             # LCB, or EI, or PI or the default gp_hedge
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
             skopt_kwargs = {'acq_func': 'gp_hedge'}
+            consider_pruned_trials = False
 
             af_value = ''
             for opt in args_sampler:
@@ -295,7 +296,8 @@ class Objective(object):
                         else:
                             logger.exception(f'Error! acquisition function {af_value} is not supported. Use LCB or EI or PI or gp_hedge.')
                             raise
-                        break
+                    elif 'consider_pruned_trials=' in value:
+                        consider_pruned_trials = True if value.split('=')[1].lower() == 'true' else False
 
             # Tweak exploration/exploitation.
             # LCB ->kappa, PI or EI ->xi
@@ -335,9 +337,11 @@ class Objective(object):
                             raise
                         break
 
-            logger.info(f'skopt_kwargs: {skopt_kwargs}')
+            logger.info(f'skopt_kwargs: {skopt_kwargs}, consider_pruned_trials: {consider_pruned_trials}')
 
-            return optuna.integration.SkoptSampler(skopt_kwargs=skopt_kwargs)
+            return optuna.integration.SkoptSampler(
+                skopt_kwargs=skopt_kwargs,
+                consider_pruned_trials=consider_pruned_trials)
 
         logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
         raise
@@ -679,7 +683,9 @@ def main():
                              '  skopt has base_estimator options namely: GP, RF, ET and GBRT, default is GP.\n'
                              '  GP=Gaussian Process, RF=Random Forest, ET=Extra Tree, GBRT=Gradient Boosted Regressor Tree.\n'
                              '  Example:\n'
-                             '  --sampler name=skopt base_estimator=GBRT acquisition_function=EI ...\n')
+                             '  --sampler name=skopt base_estimator=GBRT acquisition_function=EI ...\n'
+                             '  skopt has consider_pruned_trials parameter which is false by default. To consider pruned trials use:\n'
+                             '  --sampler name=skopt consider_pruned_trials=true ...\n')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
