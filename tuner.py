@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.39.0'
+__version__ = 'v0.40.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -283,7 +283,7 @@ class Objective(object):
             # LCB, or EI, or PI or the default gp_hedge
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
             skopt_kwargs = {'acq_func': 'gp_hedge'}
-            consider_pruned_trials = False
+            consider_pruned_trials = True
 
             af_value = ''
             for opt in args_sampler:
@@ -684,8 +684,10 @@ def main():
                              '  GP=Gaussian Process, RF=Random Forest, ET=Extra Tree, GBRT=Gradient Boosted Regressor Tree.\n'
                              '  Example:\n'
                              '  --sampler name=skopt base_estimator=GBRT acquisition_function=EI ...\n'
-                             '  skopt has consider_pruned_trials parameter which is false by default. To consider pruned trials use:\n'
-                             '  --sampler name=skopt consider_pruned_trials=true ...\n')
+                             '  skopt has also a consider_pruned_trials parameter which is true by default. To not consider pruned trials use:\n'
+                             '  --sampler name=skopt consider_pruned_trials=false ...\n'
+                             '  consider_pruned_trials means that during sampling or finding the next best param values, the parameters\n'
+                             '  that failed will be taken into account.')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
