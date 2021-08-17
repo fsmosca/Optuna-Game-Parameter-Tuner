@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.41.0'
+__version__ = 'v0.41.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -731,6 +731,11 @@ def main():
                              '--common-param \"{\'RookOpenFile\': 92, \'KnightOutpost\': 300}\"')
 
     args = parser.parse_args()
+
+    # Check if engine file exists.
+    eng_path = Path(args.engine)
+    if not eng_path.is_file():
+        raise Exception(f'The engine in {eng_path} is missing!')
 
     trials = args.trials
     init_value = args.initial_best_value
