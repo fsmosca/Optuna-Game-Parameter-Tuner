@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.15.0'
+__version__ = 'v1.16.0'
 __credits__ = ['musketeerchess']
 
 
@@ -26,6 +26,7 @@ from statistics import mean
 from typing import List
 import multiprocessing
 from datetime import datetime
+import glob
 
 
 logging.basicConfig(
@@ -77,6 +78,8 @@ class Duel:
         self.base_time_sec = 5
         self.inc_time_sec = 0.05
 
+        self.betza = []
+
         self.lock = multiprocessing.Manager().Lock()
 
     def save_game(self, fen, moves, scores, depths, e1_name, e2_name,
@@ -85,6 +88,13 @@ class Duel:
         logging.info('Saving game ...')
         tag_date = datetime.today().strftime('%Y.%m.%d')
         round_tag_value = f'{round_num}.{subround}'
+
+        betzavalue = ''
+        for b in self.betza:
+            p = b.split()[1].strip().split('&')[0]
+            v = b.split()[2].strip()
+            betzavalue += f'{p}:{v};'
+        betzavalue = betzavalue[0:-1]  # strip the last semi-colon.
 
         with open(self.pgnout, 'a') as f:
             f.write(f'[Event "{self.event}"]\n')
@@ -98,7 +108,9 @@ class Duel:
 
             f.write(f'[Variant "{self.variant}"]\n')
             if self.variant == 'musketeer':
-                f.write(f'[VariantMen "E:KDA;C:llNrrNDK;A:NB;F:B3DfNbN;M:NR;H:DHAG;S:B2DN;U:CN;D:QN;L:NB2;K:KisO2"]\n')
+                f.write(f'[VariantFamily "seirawan"]\n')
+
+            f.write(f'[VariantMen "{betzavalue}"]\n')
 
             if termination != '':
                 f.write(f'[Termination "{termination}"]\n')
@@ -191,6 +203,7 @@ class Duel:
                     send_command(e, f'option {k}={v}', pn)
 
             timer, depth_control = [], []
+            check_betza = False
             for i, pr in enumerate(eng):
                 e = pr['proc']
                 pn = pr['name']
@@ -201,8 +214,14 @@ class Duel:
                 for eline in iter(e.stdout.readline, ''):
                     line = eline.strip()
                     logging.debug(f'{pn} < {line}')
+
+                    if not check_betza and line.startswith('piece'):
+                        self.betza.append(line)
+
                     if 'pong' in line:
                         break
+
+                check_betza = True
 
                 send_command(e, 'new', pn)
 
@@ -450,22 +469,72 @@ def define_engine(engine_option_value):
     return e1, e2
 
 
-def get_fen_list(fn, is_rand=True):
+def get_fen_list(fn, is_rand=True, posperfile=-1):
     """
-    Read fen file and return a list of fens.
+    Read fen or epd file and return a list of fens. Warning if your file is too big
+    it may take some memory from your computer and may take time saving the positions
+    into memory.
     """
     fens = []
 
     if fn is None:
         return fens
 
-    with open(fn) as f:
-        for lines in f:
-            fen = lines.strip()
-            fens.append(fen)
+    # If fn is a folder read all .fen or .epd in this folder.
+    fnpath = Path(fn)
+    if fnpath.is_dir():
+        # Read epd files.
+        for name in glob.glob(f'{fn}/*.epd'):
+            file_fens = []
+            with open(name) as f:
+                for lines in f:
+                    fen = lines.strip()
+                    file_fens.append(fen)
 
-    if is_rand:
-        random.shuffle(fens)
+            if posperfile != -1:
+                if is_rand:
+                    selections = random.sample(file_fens, posperfile)
+                else:
+                    selections = file_fens[0:posperfile]
+            else:
+                if is_rand:
+                    random.shuffle(file_fens)
+                selections = file_fens
+
+            fens.extend(selections)
+
+        # Read fen files.
+        for name in glob.glob(f'{fn}/*.fen'):
+            file_fens = []
+            with open(name) as f:
+                for lines in f:
+                    fen = lines.strip()
+                    file_fens.append(fen)
+
+            if posperfile != -1:
+                if is_rand:
+                    selections = random.sample(file_fens, posperfile)
+                else:
+                    selections = file_fens[0:posperfile]
+            else:
+                if is_rand:
+                    random.shuffle(file_fens)
+                selections = file_fens
+
+            fens.extend(selections)
+
+    else:
+        saved = 0
+        with open(fn) as f:
+            for lines in f:
+                fen = lines.strip()
+                fens.append(fen)
+                saved += 1
+                if posperfile != -1 and saved >= posperfile:
+                    break
+
+        if is_rand:
+            random.shuffle(fens)
 
     return fens
 
@@ -731,10 +800,13 @@ def main():
                              'to set the depth to 4.')
     parser.add_argument('-openings', nargs='*', action='append',
                         required=False,
-                        metavar=('file=', 'random='),
+                        metavar=('file=<xxx.fen | xxx.epd>', 'random=<true | false>'),
                         help='Define start openings. Example:\n'
-                             '-openings file=start.fen random=false\n'
-                             'default random is true.\n'
+                             '-openings file=start.fen random=false posperfile=10\n'
+                             'default random is true, default posperfile is -1 meaning all pos in a file.\n'
+                             'If value of file is only a folder, then fen and epd files under that folder\n'
+                             'will be considered. Example:\n'
+                             '-openings file=c:/startpos ...\n'
                              'Start opening from move sequences is not supported.\n'
                              'Only fen and epd format are supported.')
     parser.add_argument('-tournament', required=False, default='round-robin',
@@ -786,15 +858,17 @@ def main():
             raise Exception('Error! tc or depth are not defined.')
 
     # Get the opening file and random state settings.
-    fen_file, is_random = None, True
+    fen_file, is_random, posperfile = None, True, -1
     if args.openings is not None:
         for opt in args.openings:
             for value in opt:
-                if 'file=' in value:
+                if value.startswith('file='):
                     fen_file = value.split('=')[1]
-                elif 'random=' in value:
+                elif value.startswith('random='):
                     random_value = value.split('=')[1]
                     is_random = True if random_value.lower() == 'true' else False
+                elif value.startswith('posperfile='):
+                    posperfile = int(value.split('=')[1])
 
     draw_option = {'movenumber': None, 'movecount': None, 'score': None}
     if args.draw is not None:
@@ -810,7 +884,7 @@ def main():
             val = int(opt.split('=')[1])
             resign_option.update({key: val})
 
-    fens = get_fen_list(fen_file, is_random)
+    fens = get_fen_list(fen_file, is_rand=is_random, posperfile=posperfile)
 
     duel = Duel(e1, e2, fens, args.rounds, args.concurrency, args.pgnout,
                 args.repeat, draw_option, resign_option, args.variant,
