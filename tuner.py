@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.41.1'
+__version__ = 'v0.42.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -66,7 +66,8 @@ class Objective(object):
                  depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
-                 draw_movenumber=None, draw_movecount=6, draw_score=0):
+                 draw_movenumber=None, draw_movecount=6, draw_score=0,
+                 opening_posperfile=-1):
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
@@ -118,6 +119,7 @@ class Objective(object):
         self.draw_movenumber = draw_movenumber
         self.draw_movecount = draw_movecount
         self.draw_score = draw_score
+        self.opening_posperfile = opening_posperfile
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -192,7 +194,7 @@ class Objective(object):
         if self.match_manager == 'cutechess':
             command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
         else:
-            command += f' -openings file={self.opening_file}'
+            command += f' -openings file={self.opening_file} posperfile={self.opening_posperfile}'
 
         # draw adjudication
         if self.draw_movenumber is not None:
@@ -643,6 +645,10 @@ def main():
                         help='Can be pgn, or epd for cutechess match manager,'
                              'default is pgn, for duel.py no need as it will use epd or fen.',
                         default='pgn')
+    parser.add_argument('--opening-posperfile', required=False, type=int,
+                        help='number of positions per startpos file for duel.py match manager only.\n'
+                        'If not specified then all positions will be considered.',
+                        default=-1)
     parser.add_argument('--variant', required=False, type=str,
                         help='Game variant, default=normal.', default='normal')
     parser.add_argument('--pgn-output', required=False, type=str,
@@ -866,7 +872,8 @@ def main():
                                  args.depth, games_per_trial, th_pruner,
                                  common_param, args.resign_movecount,
                                  args.resign_score, args.draw_movenumber,
-                                 args.draw_movecount, args.draw_score),
+                                 args.draw_movecount, args.draw_score,
+                                 args.opening_posperfile),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
