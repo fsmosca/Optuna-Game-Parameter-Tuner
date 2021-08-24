@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.42.1'
+__version__ = 'v0.43.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -99,8 +99,7 @@ class Objective(object):
         self.trial_num = old_trial_num
         self.proto = proto
 
-        # Todo: Improve inc_factor, 64 can relate to number of trials.
-        self.inc_factor = 1/64
+        self.inc_factor = 1/2
         self.fix_base_param = fix_base_param
         self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
@@ -506,8 +505,9 @@ class Objective(object):
         # engine will use the available best param as long as the best value
         # of this best param is better than the init value.
         else:
-            # Update best param and value. We modify the result here because the
-            # optimizer will consider the max result in its algorithm.
+            # Update best param and value. We modify the result sent to optimizer here because the
+            # optimizer will consider the max result in its algorithm. Everytime the init value is
+            # exceeded by result we increment the best value.
             # Ref.: https://github.com/optuna/optuna/issues/1728
             if result > self.init_value:
                 self.good_result_cnt += 1
@@ -530,7 +530,7 @@ class Objective(object):
                 # Adjust the result sent to the optimizer. Given a match
                 # result of 0.48 from trial 0, good_result_cnt of 0 and then
                 # later a match result of 0.48 at trial 50 with good_result_cnt
-                # of 4, the latter performs better and their results are
+                # of 4, the latter performs better and their results should be
                 # different in the eyes of the optimizer.
                 # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.470
                 # Trial: 50, good_result_cnt: 4, actual_result: 0.48, result: 0.478
