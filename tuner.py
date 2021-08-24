@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.43.0'
+__version__ = 'v0.43.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -566,7 +566,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
     if len(input_param) >= 3:
-        fig.update_layout(width=1000, height=1000)
+        fig.update_layout(width=1000 + len(input_param)*200, height=1000 + len(input_param)*200)
     fig.update_layout(paper_bgcolor=bg)
     fig.write_image(f'{pre_name}_contour.png')
 
