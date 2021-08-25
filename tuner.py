@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.43.1'
+__version__ = 'v0.43.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -490,7 +490,7 @@ class Objective(object):
         test_param = ''
         for k, v in self.test_param.items():
             test_param += f'option.{k}={v} '
-        logger.info(f'test param: {test_param}')
+        logger.info(f'test param format for match manager: {test_param}')
 
         # If base engine always uses the initial param or default param.
         if self.fix_base_param:
