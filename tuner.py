@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v0.43.4'
+__version__ = 'v1.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -56,8 +56,9 @@ except ModuleNotFoundError:
 
 
 class Objective(object):
-    def __init__(self, engine, input_param, best_param, best_value,
-                 init_param, init_value, variant, opening_file,
+    def __init__(self, study, engine, input_param, best_param, best_value,
+                 best_value_threshold, init_param, init_value, variant,
+                 opening_file,
                  opening_format, old_trial_num, pgnout,
                  nodes: Union[None, int]=None, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16,
@@ -68,9 +69,11 @@ class Objective(object):
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0,
                  opening_posperfile=-1):
+        self.study =study
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
         self.best_value = best_value
+        self.best_value_threshold = best_value_threshold
         self.init_param = copy.deepcopy(init_param)
         self.init_value = init_value
         self.rounds = rounds
@@ -290,7 +293,8 @@ class Objective(object):
             # Check acquisition function, It can be:
             # LCB, or EI, or PI or the default gp_hedge
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
-            skopt_kwargs = {'acq_func': 'gp_hedge'}
+            random_state = None
+            skopt_kwargs = {'acq_func': 'gp_hedge', 'random_state': random_state, 'acq_optimizer': 'auto'}
             consider_pruned_trials = True
 
             af_value = ''
@@ -306,6 +310,17 @@ class Objective(object):
                             raise
                     elif 'consider_pruned_trials=' in value:
                         consider_pruned_trials = True if value.split('=')[1].lower() == 'true' else False
+                    elif 'random_state=' in value:
+                        rs = value.split('=')[1].lower()
+                        if rs == 'none':
+                            random_state = None
+                        else:
+                            random_state = int(rs)
+                        skopt_kwargs.update({'random_state': random_state})
+                    elif 'acq_optimizer=' in value:
+                        # Method to minimize the acquisition function
+                        # can be auto, sampling and lbfgs
+                        skopt_kwargs.update({'acq_optimizer': value.split('=')[1].lower()})
 
             # Tweak exploration/exploitation.
             # LCB ->kappa, PI or EI ->xi
@@ -415,7 +430,12 @@ class Objective(object):
             for k, v in self.init_param.items():
                 base_options += f'option.{k}={v} '
         else:
-            if self.best_value > self.init_value:
+            # Even before the actual optimization begins we already have a
+            # best param and value because we added a trial from init param and init value.
+            # From the start the best param is the user specified init param and by
+            # default the init value is 0.5. After the study when best value could not exceed the
+            # best value threshold (default=0.5) then the best param could still be the init param.
+            if self.best_value > self.best_value_threshold:
                 for k, v in self.best_param.items():
                     base_options += f'option.{k}={v} '
             else:
@@ -434,7 +454,7 @@ class Objective(object):
         if self.fix_base_param:
             logger.info(f'param for base engine          : {self.init_param}')
         else:
-            if self.best_value > self.init_value:
+            if self.best_value > self.best_value_threshold:
                 logger.info(f'param for base engine          : {self.best_param}')
             else:
                 logger.info(f'param for base engine          : {self.init_param}')
@@ -444,10 +464,15 @@ class Objective(object):
 
         logger.info(f'init param: {self.init_param}')
         logger.info(f'init objective value: {self.init_value}')
+        logger.info(f'best value threshold: {self.best_value_threshold}')
         logger.info(f'study best param: {self.best_param}')
         logger.info(f'study best objective value: {self.best_value}')
+        logger.info(f'study best trial number: {self.study.best_trial.number}')
 
         # Run engine vs engine match.
+
+        # Handle trial pruning if there is. We only play partial games instead of the full
+        # games per trial. If the result is bad, we prune this trial thereby saving time.
         if (len(self.threshold_pruner)
                 and self.trial_num > self.startup_trials):
             games_to_play = self.threshold_pruner['games']
@@ -481,8 +506,11 @@ class Objective(object):
                 )
 
             result = Objective.result_mean(final_result)
+        # Else if there is no trial pruner just proceed with normal game test at full games per trial.
         else:
             result = self.engine_match(test_options, base_options, self.games_per_trial)
+
+        result = round(result, 5)
 
         logger.info(f'Actual match result: {result}, games: {self.games_per_trial}, point of view: optimizer suggested values')
 
@@ -502,28 +530,26 @@ class Objective(object):
                     self.best_param.update({k: v})
 
         # Else if best param used by base engine is dynamic, meaning the base
-        # engine will use the available best param as long as the best value
-        # of this best param is better than the init value.
+        # engine will use the available best param.
         else:
             # Update best param and value. We modify the result sent to optimizer here because the
-            # optimizer will consider the max result in its algorithm. Everytime the init value is
+            # optimizer will consider the max result in its algorithm. Everytime the best value threshold is
             # exceeded by result we increment the best value.
             # Ref.: https://github.com/optuna/optuna/issues/1728
-            if result > self.init_value:
+            if result > self.best_value_threshold:
                 self.good_result_cnt += 1
-                if self.best_value < self.init_value:
-                    self.best_value = self.init_value
-                inc = self.inc_factor * (result - self.init_value)
-                self.best_value += inc
+                self.best_value = round(self.best_value + self.inc_factor * (result - self.best_value), 5)
                 result = self.best_value
 
                 for k, v in self.test_param.items():
                     self.best_param.update({k: v})
             else:
-                # Backup study best value and param.
+                # If the objective value or result could not exceed the best value threshold,
+                # we still consider the current result as best value and save the param as best param if
+                # result exceeds the current best value.
+                isbest_result = False
                 if result > self.best_value:
-                    self.best_value = result
-
+                    isbest_result = True
                     for k, v in self.test_param.items():
                         self.best_param.update({k: v})
 
@@ -532,9 +558,13 @@ class Objective(object):
                 # later a match result of 0.48 at trial 50 with good_result_cnt
                 # of 4, the latter performs better and their results should be
                 # different in the eyes of the optimizer.
-                # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.470
-                # Trial: 50, good_result_cnt: 4, actual_result: 0.48, result: 0.478
-                result = result - 0.01/(self.good_result_cnt + 1)
+                # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.479
+                # Trial: 50, good_result_cnt: 4, actual_result: 0.48, result: 0.4798
+                result = round(result - 0.001/(self.good_result_cnt + 1), 5)
+
+                # Update our best value from the adjusted result.
+                if isbest_result:
+                    self.best_value = result
 
         self.trial_num += 1
 
@@ -656,9 +686,13 @@ def main():
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
-    parser.add_argument('--initial-best-value', required=False, type=float,
-                        help='The initial best value for the initial best\n'
-                             'parameter values, default=0.5.', default=0.5)
+    parser.add_argument('--best-value-threshold', required=False, type=float,
+                        help='If trial objective value does not exceeed this threshold then\n'
+                             'the param to be used by base engine is the init param otherwise\n'
+                             'use the best param whose objective value exceeds the threshold\n'
+                             'for the base engine.\n'
+                             'This is only applicable when --fix-base-param is not activated.\n'
+                             'default=0.5.', default=0.5)
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
@@ -684,8 +718,8 @@ def main():
                              '  default sigma0 or initial std deviation is None. This tells cmaes that optimal parameter values\n'
                              '  lies within init_value +/- 3 * sigma0. By default this value is the parameter minimum_range/6.\n'
                              '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html\n'
-                             '--sampler name=skopt acquisition_function=LCB ...\n'
-                             '  default acquisition_function=gp_hedge\n'
+                             '--sampler name=skopt acquisition_function=LCB random_state=100 acq_optimizer=lbfgs ...\n'
+                             '  default acquisition_function=gp_hedge, default random_state is None, default acq_optimizer is auto, can be sampling and lbfgs\n'
                              '  Can be LCB or EI or PI or gp_hedge\n'
                              '  Example to explore, with LCB and kappa, high kappa would explore, low would exploit:\n'
                              '  --sampler name=skopt acquisition_function=LCB kappa=10000\n'
@@ -700,7 +734,7 @@ def main():
                              '  skopt has also a consider_pruned_trials parameter which is true by default. To not consider pruned trials use:\n'
                              '  --sampler name=skopt consider_pruned_trials=false ...\n'
                              '  consider_pruned_trials means that during sampling or finding the next best param values, the parameters\n'
-                             '  that failed will be taken into account.')
+                             '  that failed or pruned will be taken into account.')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising'
@@ -745,7 +779,7 @@ def main():
         raise Exception(f'The engine in {eng_path} is missing!')
 
     trials = args.trials
-    init_value = args.initial_best_value
+    init_value = 0.5
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = args.fix_base_param
     common_param = args.common_param
@@ -856,13 +890,15 @@ def main():
 
             logger.info(f"added trial: yes, params: {init_trial.params}, objective value: {init_trial.values[0]}")
 
-            best_param = study.best_params
-            best_value = study.best_value
+        # Get the best param and value from the study history including the added trial.
+        best_param = study.best_params
+        best_value = study.best_value
 
         # Begin param optimization.
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
-        study.optimize(Objective(args.engine, input_param, best_param,
-                                 best_value, init_param, init_value,
+        study.optimize(Objective(study, args.engine, input_param, best_param,
+                                 best_value, args.best_value_threshold,
+                                 init_param, init_value,
                                  args.variant, args.opening_file,
                                  args.opening_format, old_trial_num,
                                  args.pgn_output, args.nodes,
