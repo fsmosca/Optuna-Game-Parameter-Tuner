@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.0.1'
+__version__ = 'v1.0.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -464,7 +464,8 @@ class Objective(object):
 
         logger.info(f'init param: {self.init_param}')
         logger.info(f'init objective value: {self.init_value}')
-        logger.info(f'best value threshold: {self.best_value_threshold}')
+        if not self.fix_base_param:
+            logger.info(f'best value threshold: {self.best_value_threshold}')
         logger.info(f'study best param: {self.best_param}')
         logger.info(f'study best objective value: {self.best_value}')
         logger.info(f'study best trial number: {self.study.best_trial.number}')
