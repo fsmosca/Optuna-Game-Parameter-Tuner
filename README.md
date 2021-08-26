@@ -83,7 +83,7 @@ See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in 
 ## F. Sample command line
 #### Using tpe optimizer
 ```python
-python tuner.py --sampler name=tpe --engine ./engines/deuterium/deuterium --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}}" --initial-best-value 0.54 --games-per-trial 24 --plot --base-time-sec 15 --inc-time-sec 0.1 --study-name study1 --pgn-output study1.pgn --trials 100 --common-param "{'Hash': 128}"
+python tuner.py --sampler name=tpe --engine ./engines/deuterium/deuterium --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}}" --games-per-trial 24 --plot --base-time-sec 15 --inc-time-sec 0.1 --study-name study1 --pgn-output study1.pgn --trials 100 --common-param "{'Hash': 128}"
 ```
 
 #### Command line with float parameter values
