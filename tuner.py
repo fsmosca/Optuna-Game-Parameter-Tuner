@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.0.0'
+__version__ = 'v1.0.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -798,7 +798,9 @@ def main():
     storage_file = f'{study_name}.db'
 
     logger.info(f'{__script_name__} {__version__}')
-    logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}, sampler: {args.sampler}\n')
+    logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}')
+    logger.info(f'fix base param: {args.fix_base_param}')
+    logger.info(f'sampler: {args.sampler}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
     input_param = ast.literal_eval(args.input_param)
