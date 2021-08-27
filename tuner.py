@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.0.2'
+__version__ = 'v1.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -294,7 +294,8 @@ class Objective(object):
             # LCB, or EI, or PI or the default gp_hedge
             # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
             random_state = None
-            skopt_kwargs = {'acq_func': 'gp_hedge', 'random_state': random_state, 'acq_optimizer': 'auto'}
+            skopt_kwargs = {'acq_func': 'gp_hedge', 'random_state': random_state, 'acq_optimizer': 'auto',
+                            'initial_point_generator': 'sobol'}
             consider_pruned_trials = True
 
             af_value = ''
