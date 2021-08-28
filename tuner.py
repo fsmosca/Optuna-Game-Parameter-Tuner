@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.3.0'
+__version__ = 'v1.3.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -692,13 +692,6 @@ def main():
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
-    parser.add_argument('--best-value-threshold', required=False, type=float,
-                        help='If trial objective value does not exceeed this threshold then\n'
-                             'the param to be used by base engine is the init param otherwise\n'
-                             'use the best param whose objective value exceeds the threshold\n'
-                             'for the base engine.\n'
-                             'This is only applicable when --fix-base-param is not activated.\n'
-                             'default=0.5.', default=0.5)
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
@@ -898,10 +891,12 @@ def main():
         best_param = study.best_params
         best_value = study.best_value
 
+        best_value_threshold = 0.5
+
         # Begin param optimization.
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
         study.optimize(Objective(study, args.engine, input_param, best_param,
-                                 best_value, args.best_value_threshold,
+                                 best_value, best_value_threshold,
                                  init_param, init_value,
                                  args.variant, args.opening_file,
                                  args.opening_format, old_trial_num,
