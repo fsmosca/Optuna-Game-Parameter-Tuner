@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.2.0'
+__version__ = 'v1.3.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -62,7 +62,7 @@ class Objective(object):
                  opening_format, old_trial_num, pgnout,
                  nodes: Union[None, int]=None, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16,
-                 concurrency=1, proto='uci', fix_base_param=False,
+                 concurrency=1, proto='uci', fix_base_param=True,
                  match_manager='cutechess', good_result_cnt=0,
                  depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
@@ -702,9 +702,6 @@ def main():
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
-    parser.add_argument('--fix-base-param', action='store_true',
-                        help='A flag to fix the parameter of base engine.\n'
-                             'It will use the init or default parameter values.')
     parser.add_argument('--match-manager', required=False, type=str,
                         help='The application that handles the engine match,'
                              ' default=cutechess.',
@@ -787,7 +784,7 @@ def main():
     trials = args.trials
     init_value = 0.5
     save_plots_every_trial = args.save_plots_every_trial
-    fix_base_param = args.fix_base_param
+    fix_base_param = True
     common_param = args.common_param
 
     if common_param is not None:
@@ -805,7 +802,6 @@ def main():
 
     logger.info(f'{__script_name__} {__version__}')
     logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}')
-    logger.info(f'fix base param: {args.fix_base_param}')
     logger.info(f'sampler: {args.sampler}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
