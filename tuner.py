@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.3.1'
+__version__ = 'v2.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -59,7 +59,7 @@ class Objective(object):
     def __init__(self, study, engine, input_param, best_param, best_value,
                  best_value_threshold, init_param, init_value, variant,
                  opening_file,
-                 opening_format, old_trial_num, pgnout,
+                 opening_format, pgnout,
                  nodes: Union[None, int]=None, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16,
                  concurrency=1, proto='uci', fix_base_param=True,
@@ -68,7 +68,7 @@ class Objective(object):
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0,
-                 opening_posperfile=-1):
+                 opening_posperfile=-1, n_startup_trials=1):
         self.study =study
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
@@ -95,11 +95,7 @@ class Objective(object):
         self.base_time_sec = base_time_sec
         self.inc_time_sec = inc_time_sec
 
-        self.old_trial_num = old_trial_num
-
         self.test_param = {}
-
-        self.trial_num = old_trial_num
         self.proto = proto
 
         self.inc_factor = 1/2
@@ -109,7 +105,7 @@ class Objective(object):
         self.depth = depth
         self.games_per_trial = games_per_trial
 
-        self.startup_trials = 10
+        self.startup_trials = n_startup_trials
         self.threshold_pruner = copy.deepcopy(threshold_pruner)
 
         if self.match_manager == 'cutechess' and self.proto == 'cecp':
@@ -122,6 +118,25 @@ class Objective(object):
         self.draw_movecount = draw_movecount
         self.draw_score = draw_score
         self.opening_posperfile = opening_posperfile
+        self.trial_hist_check = self.save_trial_history()
+
+    def save_trial_history(self):
+        ret = {}
+        for t in self.study.trials:
+            # Don't include interrupted trials.
+            if t.state == optuna.trial.TrialState.RUNNING:
+                continue
+
+            trial_hist = {}
+
+            value = t.value
+            for k, v in t.params.items():
+                trial_hist.update({k: v})
+
+            key = self.gen_parval_key(trial_hist)
+            ret.update({key: value})
+
+        return ret
 
     def read_result(self, line: str) -> float:
         """Read result output line from match manager."""
@@ -237,6 +252,8 @@ class Objective(object):
 
     @staticmethod
     def get_sampler(args_sampler):
+        n_startup_trials = 10
+
         if args_sampler is None:
             logger.warning('Sampler option is not defined, use tpe sampler.')
             return optuna.samplers.TPESampler()
@@ -279,19 +296,23 @@ class Objective(object):
             return optuna.samplers.TPESampler(
                 n_ei_candidates=n_ei_candidates,  multivariate=multivariate,
                 group=group, seed=seed, constant_liar=constant_liar,
-                n_startup_trials=n_startup_trials)
+                n_startup_trials=n_startup_trials), n_startup_trials
 
         if name == 'cmaes':
+            n_startup_trials = 1
             sigma0 = None  # initial std. deviation
             for opt in args_sampler:
                 for value in opt:
                     if 'sigma0=' in value:
                         sigma0 = float(value.split('=')[1])
+                    elif 'n_startup_trials=' in value:
+                        n_startup_trials = int(value.split('=')[1])
 
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html
-            return optuna.integration.PyCmaSampler(sigma0=sigma0)
+            return optuna.integration.PyCmaSampler(sigma0=sigma0, n_startup_trials=n_startup_trials), n_startup_trials
 
         if name == 'skopt':
+            n_startup_trials = 1
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
 
             # Check acquisition function, It can be:
@@ -313,6 +334,8 @@ class Objective(object):
                         else:
                             logger.exception(f'Error! acquisition function {af_value} is not supported. Use LCB or EI or PI or gp_hedge.')
                             raise
+                    elif 'n_startup_trials=' in value:
+                        n_startup_trials = int(value.split('=')[1])
                     elif 'consider_pruned_trials=' in value:
                         consider_pruned_trials = True if value.split('=')[1].lower() == 'true' else False
                     elif 'random_state=' in value:
@@ -369,7 +392,8 @@ class Objective(object):
 
             return optuna.integration.SkoptSampler(
                 skopt_kwargs=skopt_kwargs,
-                consider_pruned_trials=consider_pruned_trials)
+                consider_pruned_trials=consider_pruned_trials,
+                n_startup_trials=n_startup_trials), n_startup_trials
 
         logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
         raise
@@ -402,6 +426,17 @@ class Objective(object):
 
         return pruner, th_pruner
 
+    def gen_parval_key(self, param):
+        """
+        Generates a key based on param name and param value.
+        """
+        parvalkey = ''
+        for k, v in param.items():
+            parvalkey += f'{k}={v},'
+        parvalkey = parvalkey[0:-1]
+
+        return parvalkey
+
     def __call__(self, trial):
         logger.info('')
         logger.info(f'starting trial: {trial.number} ...')
@@ -414,6 +449,7 @@ class Objective(object):
                 param_type = v['type']
             except KeyError:
                 param_type = 'int'
+
             if param_type == 'float':
                 par_val = trial.suggest_float(k, v['min'], v['max'], step=v['step'])
             # Otherwise use integer.
@@ -421,6 +457,19 @@ class Objective(object):
                 par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
+
+        # Check if param values suggested by sampler was already suggested before and if so
+        # just retrieve the objective value and send it to the sampler.
+        test_param_key = self.gen_parval_key(self.test_param)
+        if test_param_key in self.trial_hist_check:
+            value = self.trial_hist_check[test_param_key]
+            logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
+            logging.warning(f'Just return previous value of {value}')
+            return value
+
+        # Update trial_hist_check for sampler duplicate suggestions.
+        # We update its objective value (0.0 at the moment) after we get the engine vs engine match result.
+        self.trial_hist_check.update({test_param_key: 0.0})
 
         # Add common param. It should not be included in the test param.
         if self.common_param is not None:
@@ -480,7 +529,7 @@ class Objective(object):
         # Handle trial pruning if there is. We only play partial games instead of the full
         # games per trial. If the result is bad, we prune this trial thereby saving time.
         if (len(self.threshold_pruner)
-                and self.trial_num > self.startup_trials):
+                and len(self.study.trials) > self.startup_trials):
             games_to_play = self.threshold_pruner['games']
             result, played_games, final_result = 0.0, 0, []
 
@@ -491,16 +540,16 @@ class Objective(object):
                 played_games += games_to_play
                 final_result.append(cur_result)
                 result = Objective.result_mean(final_result)
-                logger.info(f'played_games: {played_games}, result: {{intermediate: {cur_result}, average: {result}}}')
+                logger.info(f'played_games: {played_games}, result: {{intermediate: {cur_result:0.5f}, average: {result:0.5f}}}')
 
                 trial.report(result, played_games)
 
                 if trial.should_prune():
-                    logger.info(f'status: pruned, trial: {self.trial_num},'
+                    logger.info(f'status: pruned,'
                                 f' played_games: {played_games},'
                                 f' total_games: {self.games_per_trial},'
-                                f' current_result: {result}')
-                    self.trial_num += 1
+                                f' current_result: {result:0.5f}')
+                    self.trial_hist_check.update({test_param_key: round(result, 5)})
                     raise optuna.TrialPruned()
 
                 if played_games >= self.games_per_trial:
@@ -528,6 +577,9 @@ class Objective(object):
 
         # If base engine always uses the initial param or default param.
         if self.fix_base_param:
+            # Update the repeat data where the key was previously defined.
+            self.trial_hist_check.update({test_param_key: result})
+
             # Backup best value and param.
             if result > self.best_value:
                 self.best_value = result
@@ -571,8 +623,6 @@ class Objective(object):
                 # Update our best value from the adjusted result.
                 if isbest_result:
                     self.best_value = result
-
-        self.trial_num += 1
 
         logger.info(f'result sent to optimizer: {result}')
 
@@ -710,13 +760,14 @@ def main():
                              '--sampler name=tpe n_ei_candidates=50 multivariate=true group=true seed=100 constant_liar=true n_startup_trials=6 ...\n'
                              '  default values: n_ei_candidates=24, multivariate=false, group=false, seed=None, constant_liar=false, n_startup_trials=10\n'
                              '  TPE ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html\n'
-                             '--sampler name=cmaes sigma0=20 ...\n'
-                             '  default sigma0 or initial std deviation is None. This tells cmaes that optimal parameter values\n'
+                             '--sampler name=cmaes sigma0=20 n_startup_trials=6 ...\n'
+                             '  default values: sigma0 or initial std deviation is None, n_startup_trials=1.\n'
+                             '  This tells cmaes that optimal parameter values\n'
                              '  lies within init_value +/- 3 * sigma0. By default this value is the parameter minimum_range/6.\n'
                              '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html\n'
-                             '--sampler name=skopt acquisition_function=LCB random_state=100 acq_optimizer=lbfgs ...\n'
-                             '  default acquisition_function=gp_hedge, default random_state is None, default acq_optimizer is auto, can be sampling and lbfgs\n'
-                             '  Can be LCB or EI or PI or gp_hedge\n'
+                             '--sampler name=skopt acquisition_function=LCB random_state=100 acq_optimizer=lbfgs n_startup_trials=6 ...\n'
+                             '  default values: acquisition_function=gp_hedge, random_state is None, acq_optimizer=auto, can be sampling and lbfgs, n_startup_trials=1\n'
+                             '  acquisition_function can be LCB or EI or PI or gp_hedge\n'
                              '  Example to explore, with LCB and kappa, high kappa would explore, low would exploit:\n'
                              '  --sampler name=skopt acquisition_function=LCB kappa=10000\n'
                              '  Example to exploit, with EI or PI and xi, high xi would explore, low would exploit:\n'
@@ -815,7 +866,7 @@ def main():
     cycle = 0
 
     # Define sampler to use, default is TPE.
-    sampler = Objective.get_sampler(args.sampler)
+    sampler, n_startup_trials = Objective.get_sampler(args.sampler)
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after games threshold then prune the trial. Get new param
@@ -857,8 +908,6 @@ def main():
             raise
         logger.info(f'study best param: {best_param}')
 
-        old_trial_num = len(study.trials)
-
         # Get the good result count before we resume the study.
         if is_panda_ok and not fix_base_param and is_study:
             df = study.trials_dataframe(attrs=('value', 'state'))
@@ -899,7 +948,7 @@ def main():
                                  best_value, best_value_threshold,
                                  init_param, init_value,
                                  args.variant, args.opening_file,
-                                 args.opening_format, old_trial_num,
+                                 args.opening_format,
                                  args.pgn_output, args.nodes,
                                  args.base_time_sec, args.inc_time_sec,
                                  rounds, args.concurrency,
@@ -909,7 +958,7 @@ def main():
                                  common_param, args.resign_movecount,
                                  args.resign_score, args.draw_movenumber,
                                  args.draw_movecount, args.draw_score,
-                                 args.opening_posperfile),
+                                 args.opening_posperfile, n_startup_trials),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
