@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v1.1.0'
+__version__ = 'v1.2.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -254,11 +254,12 @@ class Objective(object):
 
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
         if name == 'tpe':
-            ei_samples, multivariate, group, seed, constant_liar = 24, False, False, None, False
+            n_ei_candidates, multivariate, group, seed, constant_liar = 24, False, False, None, False
+            n_startup_trials = 10
             for opt in args_sampler:
                 for value in opt:
-                    if 'ei_samples=' in value:
-                        ei_samples = int(value.split('=')[1])
+                    if 'n_ei_candidates=' in value:
+                        n_ei_candidates = int(value.split('=')[1])
                     elif 'multivariate=' in value:
                         multivariate = True if value.split('=')[1].lower() == 'true' else False
                     elif 'group=' in value:
@@ -267,6 +268,8 @@ class Objective(object):
                         seed = int(value.split('=')[1])
                     elif 'constant_liar=' in value:
                         constant_liar = True if value.split('=')[1].lower() == 'true' else False
+                    elif 'n_startup_trials=' in value:
+                        n_startup_trials = int(value.split('=')[1])
 
             # Avoid ValueError when multivariate is false and group is true
             if group and not multivariate:
@@ -274,8 +277,9 @@ class Objective(object):
                 logger.warning(f'group is set to false as multivariate is false!')
 
             return optuna.samplers.TPESampler(
-                n_ei_candidates=ei_samples,  multivariate=multivariate,
-                group=group, seed=seed, constant_liar=constant_liar)
+                n_ei_candidates=n_ei_candidates,  multivariate=multivariate,
+                group=group, seed=seed, constant_liar=constant_liar,
+                n_startup_trials=n_startup_trials)
 
         if name == 'cmaes':
             sigma0 = None  # initial std. deviation
@@ -713,8 +717,8 @@ def main():
                         metavar=('name=', 'option_name='),
                         help='The sampler to be used in the study, default name=tpe.\n'
                              'name can be tpe or cmaes or skopt, examples:\n'
-                             '--sampler name=tpe ei_samples=50 multivariate=true group=true seed=100 constant_liar=true  ...\n'
-                             '  default values: ei_samples=24, multivariate=false, group=false, seed=None, constant_liar=false\n'
+                             '--sampler name=tpe n_ei_candidates=50 multivariate=true group=true seed=100 constant_liar=true n_startup_trials=6 ...\n'
+                             '  default values: n_ei_candidates=24, multivariate=false, group=false, seed=None, constant_liar=false, n_startup_trials=10\n'
                              '  TPE ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html\n'
                              '--sampler name=cmaes sigma0=20 ...\n'
                              '  default sigma0 or initial std deviation is None. This tells cmaes that optimal parameter values\n'
