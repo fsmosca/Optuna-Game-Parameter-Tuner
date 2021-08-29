@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v2.0.0'
+__version__ = 'v2.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -299,17 +299,20 @@ class Objective(object):
                 n_startup_trials=n_startup_trials), n_startup_trials
 
         if name == 'cmaes':
-            n_startup_trials = 1
+            n_startup_trials, seed = 1, None
             sigma0 = None  # initial std. deviation
             for opt in args_sampler:
                 for value in opt:
                     if 'sigma0=' in value:
                         sigma0 = float(value.split('=')[1])
+                    elif 'seed=' in value:
+                        seed = int(value.split('=')[1])
                     elif 'n_startup_trials=' in value:
                         n_startup_trials = int(value.split('=')[1])
 
             # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html
-            return optuna.integration.PyCmaSampler(sigma0=sigma0, n_startup_trials=n_startup_trials), n_startup_trials
+            return optuna.integration.PyCmaSampler(
+                sigma0=sigma0, seed=seed, n_startup_trials=n_startup_trials), n_startup_trials
 
         if name == 'skopt':
             n_startup_trials = 1
@@ -760,8 +763,8 @@ def main():
                              '--sampler name=tpe n_ei_candidates=50 multivariate=true group=true seed=100 constant_liar=true n_startup_trials=6 ...\n'
                              '  default values: n_ei_candidates=24, multivariate=false, group=false, seed=None, constant_liar=false, n_startup_trials=10\n'
                              '  TPE ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html\n'
-                             '--sampler name=cmaes sigma0=20 n_startup_trials=6 ...\n'
-                             '  default values: sigma0 or initial std deviation is None, n_startup_trials=1.\n'
+                             '--sampler name=cmaes sigma0=20 n_startup_trials=6 seed=100 ...\n'
+                             '  default values: sigma0 or initial std deviation is None, n_startup_trials=1, seed=None.\n'
                              '  This tells cmaes that optimal parameter values\n'
                              '  lies within init_value +/- 3 * sigma0. By default this value is the parameter minimum_range/6.\n'
                              '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html\n'
