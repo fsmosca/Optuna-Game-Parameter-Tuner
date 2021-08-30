@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v2.1.0'
+__version__ = 'v3.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -28,28 +28,28 @@ import optuna
 from optuna.distributions import IntUniformDistribution, DiscreteUniformDistribution
 
 
-logging.basicConfig(
-    filename='log_tuner.txt',
-    filemode='a',
-    level=logging.INFO,
-    format='%(asctime)s | %(levelname)-5.5s | %(message)s'
-)
-
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
+
 optuna.logging.enable_propagation()
 optuna.logging.disable_default_handler()
 optuna.logging.set_verbosity(optuna.logging.DEBUG)
 
-chandler = logging.StreamHandler(sys.stdout)
-chandler.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-5.5s | %(message)s'))
-chandler.setLevel(logging.INFO)
-logger.addHandler(chandler)
+fh = logging.FileHandler(filename='log_tuner.txt', mode='a')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-5.5s | %(message)s'))
+logger.addHandler(fh)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.INFO)
+ch.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-5.5s | %(message)s'))
+logger.addHandler(ch)
 
 
 is_panda_ok = True
 try:
     import pandas
+    pandas.set_option("display.max_rows", None, "display.max_columns", None)
 except ModuleNotFoundError:
     is_panda_ok = False
     logger.info('Warning! pandas is not installed.')
@@ -68,7 +68,8 @@ class Objective(object):
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0,
-                 opening_posperfile=-1, n_startup_trials=1):
+                 opening_posperfile=-1, n_startup_trials=1,
+                 noisy_result=False):
         self.study =study
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
@@ -119,6 +120,7 @@ class Objective(object):
         self.draw_score = draw_score
         self.opening_posperfile = opening_posperfile
         self.trial_hist_check = self.save_trial_history()
+        self.noisy_result = noisy_result
 
     def save_trial_history(self):
         ret = {}
@@ -465,10 +467,14 @@ class Objective(object):
         # just retrieve the objective value and send it to the sampler.
         test_param_key = self.gen_parval_key(self.test_param)
         if test_param_key in self.trial_hist_check:
-            value = self.trial_hist_check[test_param_key]
-            logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
-            logging.warning(f'Just return previous value of {value}')
-            return value
+            if not self.noisy_result:
+                value = self.trial_hist_check[test_param_key]
+                logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
+                logging.warning(f'Just return previous value of {value}')
+                return value
+            else:
+                logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
+                logging.warning(f'Execute engine match as --noisy-result flag is enabled.')
 
         # Update trial_hist_check for sampler duplicate suggestions.
         # We update its objective value (0.0 at the moment) after we get the engine vs engine match result.
@@ -745,6 +751,13 @@ def main():
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
+    parser.add_argument('--noisy-result', action='store_true',
+                        help='A flag to replay engine vs engine match when sampler repeats suggesting same parameter values.\n'
+                             'When you play an engine vs engine match at fixed depth, generally the result is not noisy.\n'
+                             'When the sampler suggests a param that was already suggested before we just return the result from\n'
+                             'the previous trial. However if you play an engine vs engine match with TC, the result is noisy\n'
+                             'specially when number of games is low. If this flag is enabled, we replay an engine match even if\n'
+                             'the param was already suggested before.')
     parser.add_argument('--save-plots-every-trial', required=False, type=int,
                         help='Save plots every n trials, default=10.',
                         default=10)
@@ -961,7 +974,8 @@ def main():
                                  common_param, args.resign_movecount,
                                  args.resign_score, args.draw_movenumber,
                                  args.draw_movecount, args.draw_score,
-                                 args.opening_posperfile, n_startup_trials),
+                                 args.opening_posperfile, n_startup_trials,
+                                 args.noisy_result),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
@@ -973,6 +987,40 @@ def main():
                                                'state'))
             logger.info(f'{df.to_string(index=False)}\n')
             df.to_csv(f'{study_name}.csv', index=False)
+
+            # Show a frame where same param are grouped and value is averaged.
+            df = df[df['value'].notnull()]  # Remove row with nan value
+            h = list(df)
+            h.remove('value')
+            h.remove('state')
+            h.remove('number')
+
+            # Group same param and get count. Example if trial 1 and trial 14
+            # have the same param but different objective value, the count will be 2.
+            logger.debug('Group count:')
+            dfc = df.copy(deep=True)
+            dfc = dfc.groupby(h).count()
+            del dfc['state']
+            del dfc['value']
+            dfc.rename(columns={'number': 'count'}, inplace=True)
+            logger.debug(dfc)
+            logging.info('')
+
+            # Group same param and get the average objective value. Example if trial 1
+            # and trial 14 have the same param but trial 1 has objective value of 0.56 and
+            # trial 14 has a value of 0.48, the average will be (0.56+0.48)/2 or 0.52.
+            # The top 5 or so with value above 0.5 can be considered as the best and can
+            # be used in the game verification match.
+            dfg = df.copy(deep=True)
+            dfg = dfg.groupby(h).mean().reset_index()
+            logger.debug('Mean of objective value on trials with/without same parameters:')
+            dfg = dfg.sort_values(by=['value'], ascending=False).reset_index(drop=True)
+            del dfg['number']
+            dfg.rename(columns={'value': 'value_mean'}, inplace=True)
+            logger.debug(dfg.to_string(index=False))
+            print('Top mean of objective value on trials with/without same parameters:')
+            print(dfg.head(15))
+            logging.info('')
 
         # Show the best param, value and trial number.
         logger.info(f'study best param: {study.best_params}')
