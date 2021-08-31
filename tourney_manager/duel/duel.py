@@ -10,7 +10,7 @@ A module to handle xboard or winboard engine matches.
 
 __author__ = 'fsmosca'
 __script_name__ = 'Duel'
-__version__ = 'v1.16.0'
+__version__ = 'v1.17.0'
 __credits__ = ['musketeerchess']
 
 
@@ -402,6 +402,7 @@ class Duel:
         """Start the match."""
         joblist = []
         test_engine_score_list = []
+        wins, losses, draws = 0, 0, 0
 
         # Use Python 3.8 or higher
         with ProcessPoolExecutor(max_workers=self.concurrency) as executor:
@@ -416,9 +417,17 @@ class Duel:
                     test_engine_score = future.result()
                     for s in test_engine_score:
                         test_engine_score_list.append(s)
+
+                        if s == 1:
+                            wins += 1
+                        elif s == 0:
+                            losses += 1
+                        elif s == 0.5:
+                            draws += 1
+
                     perf = mean(test_engine_score_list)
                     games = len(test_engine_score_list)
-                    print(f'Score of {self.e1["name"]} vs {self.e2["name"]}: [{perf:0.8f}] {games}')
+                    print(f'Score of {self.e1["name"]} vs {self.e2["name"]}: {wins} - {losses} - {draws}  [{perf:0.8f}] {games}')
                 except concurrent.futures.process.BrokenProcessPool as ex:
                     print(f'exception: {ex}')
 
