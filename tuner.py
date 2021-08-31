@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v3.0.0'
+__version__ = 'v3.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -141,23 +141,19 @@ class Objective(object):
         return ret
 
     def read_result(self, line: str) -> float:
-        """Read result output line from match manager."""
-        match_man = self.match_manager
+        """
+        Read result output line from match manager.
 
-        if match_man == 'cutechess':
-            # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
-            num_wins = int(line.split(': ')[1].split(' -')[0])
-            num_draws = int(line.split(': ')[1].split('-')[2].strip().split()[0])
-            num_games = int(line.split('] ')[1].strip())
-            result = (num_wins + num_draws / 2) / num_games
-        elif match_man == 'duel':
-            # Score of e1 vs e2: [0.4575] 20
-            result = float(line.split('[')[1].split(']')[0])
-        else:
-            logger.exception(f'Error, match_manager {match_man} is not supported.')
-            raise
+        # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
+        wins=39, losses=28, draws=64, games=131
+        """
+        num_wins = int(line.split(': ')[1].split(' -')[0])
+        num_losses = int(line.split(': ')[1].split(' -')[1])
+        num_draws = int(line.split(': ')[1].split('-')[2].strip().split()[0])
+        num_games = int(line.split('] ')[1].strip())
+        result = (num_wins + num_draws / 2) / num_games
 
-        return result
+        return result, num_wins, num_losses, num_draws, num_games
 
     @staticmethod
     def set_param(input_param):
@@ -239,14 +235,14 @@ class Objective(object):
         for eline in iter(process.stdout.readline, ''):
             line = eline.strip()
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result = self.read_result(line)
+                result, wins, losses, draws, games = self.read_result(line)
                 if 'Finished match' in line:
                     break
 
         if result == '':
             raise Exception('Error, there is something wrong with the engine match.')
 
-        return result
+        return result, wins, losses, draws, games
 
     @staticmethod
     def result_mean(data: List[float]) -> float:
@@ -537,6 +533,7 @@ class Objective(object):
 
         # Handle trial pruning if there is. We only play partial games instead of the full
         # games per trial. If the result is bad, we prune this trial thereby saving time.
+        wins, losses, draws, games = 0, 0, 0, 0
         if (len(self.threshold_pruner)
                 and len(self.study.trials) > self.startup_trials):
             games_to_play = self.threshold_pruner['games']
@@ -544,18 +541,25 @@ class Objective(object):
 
             while True:
                 logger.info(f'games_to_play: {games_to_play}')
-                cur_result = self.engine_match(test_options, base_options, games_to_play)
+                cur_result, pwins, plosses, pdraws, pgames = self.engine_match(test_options, base_options, games_to_play)
+                wins += pwins
+                losses += plosses
+                draws += pdraws
+                games += pgames
 
                 played_games += games_to_play
                 final_result.append(cur_result)
                 result = Objective.result_mean(final_result)
-                logger.info(f'played_games: {played_games}, result: {{intermediate: {cur_result:0.5f}, average: {result:0.5f}}}')
+                logger.info(f'played_games: {played_games},'
+                            f' W/D/L: {wins}/{draws}/{losses},'
+                            f' result: {{intermediate: {cur_result:0.5f}, W/D/L: {pwins}/{pdraws}/{plosses}, average: {result:0.5f}}}')
 
                 trial.report(result, played_games)
 
                 if trial.should_prune():
                     logger.info(f'status: pruned,'
                                 f' played_games: {played_games},'
+                                f' W/D/L: {wins}/{draws}/{losses},'
                                 f' total_games: {self.games_per_trial},'
                                 f' current_result: {result:0.5f}')
                     self.trial_hist_check.update({test_param_key: round(result, 5)})
@@ -572,11 +576,13 @@ class Objective(object):
             result = Objective.result_mean(final_result)
         # Else if there is no trial pruner just proceed with normal game test at full games per trial.
         else:
-            result = self.engine_match(test_options, base_options, self.games_per_trial)
+            result, wins, losses, draws, games = self.engine_match(test_options, base_options, self.games_per_trial)
 
         result = round(result, 5)
-
-        logger.info(f'Actual match result: {result}, games: {self.games_per_trial}, point of view: optimizer suggested values')
+        logger.info(f'Actual match result: {result},'
+                    f' games: {self.games_per_trial},'
+                    f' W/D/L: {wins}/{draws}/{losses},'
+                    f' point of view: optimizer suggested values')
 
         # Output for match manager.
         test_param = ''
