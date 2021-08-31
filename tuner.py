@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v3.1.0'
+__version__ = 'v3.2.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -23,6 +23,7 @@ from pathlib import Path
 import ast
 from typing import List, Union
 import logging
+import math
 
 import optuna
 from optuna.distributions import IntUniformDistribution, DiscreteUniformDistribution
@@ -53,6 +54,82 @@ try:
 except ModuleNotFoundError:
     is_panda_ok = False
     logger.info('Warning! pandas is not installed.')
+
+
+class Elo:
+    """
+    Ref.: https://github.com/cutechess/cutechess/blob/master/projects/lib/src/elo.cpp
+    """
+    def __init__(self, win, loss, draw):
+        self.wins = win
+        self.losses = loss
+        self.draws = draw
+        self.n = win + loss + draw
+        self.mu = self.wins/self.n + self.draws/self.n / 2
+
+    def stdev(self):
+        n = self.n
+        wr = self.wins / n
+        lr = self.losses / n
+        dr = self.draws / n
+
+        dev_w = wr * math.pow(1.0 - self.mu, 2.0)
+        dev_l = lr * math.pow(0.0 - self.mu, 2.0)
+        dev_d = dr * math.pow(0.5 - self.mu, 2.0)
+
+        return math.sqrt(dev_w + dev_l + dev_d) / math.sqrt(n)
+
+    def draw_ratio(self):
+        return self.draws / self.n
+
+    def diff(self, p=None):
+        """Elo difference"""
+        p = self.mu if p is None else p
+
+        # Manage extreme values of p, if 1.0 or more make it 0.99.
+        # If 0 or below make it 0.01. With 0.01 the The max rating diff is 800.
+        p = min(0.99, max(0.01, p))
+        return -400.0 * math.log10(1.0 / p - 1.0)
+
+    def error_margin(self, confidence_level=95):
+        a = (1 - confidence_level/100) / 2
+        mu_min = self.mu + self.phi_inv(a) * self.stdev()
+        mu_max = self.mu + self.phi_inv(1-a) * self.stdev()
+        return (self.diff(mu_max) - self.diff(mu_min)) / 2.0
+
+    def erf_inv(self, x):
+        pi = 3.1415926535897
+
+        a = 8.0 * (pi - 3.0) / (3.0 * pi * (4.0 - pi))
+        y = math.log(1.0 - x * x)
+        z = 2.0 / (pi * a) + y / 2.0
+
+        ret = math.sqrt(math.sqrt(z * z - y / a) - z)
+
+        if x < 0.0:
+            return -ret
+        return ret
+
+    def phi_inv(self, p):
+        return math.sqrt(2.0) * self.erf_inv(2.0 * p - 1.0)
+
+    def los(self):
+        """LOS - Likelihood Of Superiority"""
+        if self.wins == 0 and self.losses == 0:
+            return 0
+        return 100 * (0.5 + 0.5 * math.erf((self.wins - self.losses) / math.sqrt(2.0 * (self.wins + self.losses))))
+
+    def confidence_interval(self, confidence_level=95, type_='elo'):
+        e = self.diff()
+        em = self.error_margin(confidence_level)
+
+        if type_ == 'rate':
+            return self.expected_score_rate(e-em), self.expected_score_rate(e+em)
+        else:
+            return e-em, e+em
+
+    def expected_score_rate(self, rd):
+        return 1 / (1 + 10 ** (-rd/400))
 
 
 class Objective(object):
@@ -226,6 +303,7 @@ class Objective(object):
 
     def engine_match(self, test_options, base_options, games=50) -> float:
         result = ''
+        wins, losses, draws = 0, 0, 0
 
         tour_manager, command = self.get_match_commands(
             test_options, base_options, games)
@@ -579,10 +657,21 @@ class Objective(object):
             result, wins, losses, draws, games = self.engine_match(test_options, base_options, self.games_per_trial)
 
         result = round(result, 5)
-        logger.info(f'Actual match result: {result},'
-                    f' games: {self.games_per_trial},'
-                    f' W/D/L: {wins}/{draws}/{losses},'
-                    f' point of view: optimizer suggested values')
+
+        # Log elo diff and confidence interval.
+        elo = Elo(wins, losses, draws)
+        confidence_level = 95
+        ci_low_pct, ci_high_pct = elo.confidence_interval(confidence_level=confidence_level, type_='rate')
+        ci_low_elo, ci_high_elo = elo.confidence_interval(confidence_level=confidence_level, type_='elo')
+        elodiff = elo.diff()
+        em = elo.error_margin(confidence_level)
+        los = elo.los()
+        dr = elo.draw_ratio()
+
+        logger.info(f'Actual match result: {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%, POV: optimizer suggested values')
+        logger.info(f'Games: {self.games_per_trial}, W/D/L: {wins}/{draws}/{losses}')
+        logger.info(f'Elo Diff: {elodiff:+0.1f}, ErrMargin: +/- {em:0.1f}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}],'
+                    f' LOS: {los:0.1f}%, DrawRatio: {100 * dr:0.2f}%')
 
         # Output for match manager.
         test_param = ''
