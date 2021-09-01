@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v3.2.0'
+__version__ = 'v4.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -146,7 +146,7 @@ class Objective(object):
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0,
                  opening_posperfile=-1, n_startup_trials=1,
-                 noisy_result=False):
+                 noisy_result=False, elo_objective=False):
         self.study =study
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
@@ -198,6 +198,7 @@ class Objective(object):
         self.opening_posperfile = opening_posperfile
         self.trial_hist_check = self.save_trial_history()
         self.noisy_result = noisy_result
+        self.elo_objective = elo_objective
 
     def save_trial_history(self):
         ret = {}
@@ -478,12 +479,13 @@ class Objective(object):
         raise
 
     @staticmethod
-    def get_pruner(args_threshold_pruner, games_per_trial):
+    def get_pruner(args_threshold_pruner, games_per_trial, elo_objective=False):
         pruner, th_pruner = None, {}
         if args_threshold_pruner is not None:
 
             # Default if there is threshold pruner.
-            th_pruner.update({'result': 0.25, 'games': games_per_trial // 2, 'interval': 1})
+            result_threshold = -10.0 if elo_objective else 0.25
+            th_pruner.update({'result': result_threshold, 'games': games_per_trial // 2, 'interval': 1})
 
             for opt in args_threshold_pruner:
                 for value in opt:
@@ -618,28 +620,34 @@ class Objective(object):
             result, played_games, final_result = 0.0, 0, []
 
             while True:
-                logger.info(f'games_to_play: {games_to_play}')
+                logger.info(f'games_to_play: {games_to_play} ...')
                 cur_result, pwins, plosses, pdraws, pgames = self.engine_match(test_options, base_options, games_to_play)
-                wins += pwins
-                losses += plosses
-                draws += pdraws
-                games += pgames
+                wins += pwins; losses += plosses; draws += pdraws; games += pgames
+
+                # Elo for partial games.
+                pelo = Elo(pwins, plosses, pdraws); pelodiff = pelo.diff()
+
+                if self.elo_objective:
+                    cur_result = round(pelodiff, 0)
+                else:
+                    cur_result = round(cur_result, 5)
 
                 played_games += games_to_play
                 final_result.append(cur_result)
                 result = Objective.result_mean(final_result)
-                logger.info(f'played_games: {played_games},'
-                            f' W/D/L: {wins}/{draws}/{losses},'
-                            f' result: {{intermediate: {cur_result:0.5f}, W/D/L: {pwins}/{pdraws}/{plosses}, average: {result:0.5f}}}')
+
+                logger.info(f'result: {{intermediate: {cur_result}, G/W/D/L: {pgames}/{pwins}/{pdraws}/{plosses}}}')
+                logger.info(f'result: {{average: {result}, G/W/D/L: {games}/{wins}/{draws}/{losses}}}')
+
+                elo = Elo(wins, losses, draws)
+                elodiff = elo.diff()
+
+                if self.elo_objective:
+                    result = round(elodiff, 0)
 
                 trial.report(result, played_games)
 
                 if trial.should_prune():
-                    logger.info(f'status: pruned,'
-                                f' played_games: {played_games},'
-                                f' W/D/L: {wins}/{draws}/{losses},'
-                                f' total_games: {self.games_per_trial},'
-                                f' current_result: {result:0.5f}')
                     self.trial_hist_check.update({test_param_key: round(result, 5)})
                     raise optuna.TrialPruned()
 
@@ -668,9 +676,18 @@ class Objective(object):
         los = elo.los()
         dr = elo.draw_ratio()
 
-        logger.info(f'Actual match result: {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%, POV: optimizer suggested values')
-        logger.info(f'Games: {self.games_per_trial}, W/D/L: {wins}/{draws}/{losses}')
-        logger.info(f'Elo Diff: {elodiff:+0.1f}, ErrMargin: +/- {em:0.1f}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}],'
+        if self.elo_objective:
+            result = round(elodiff, 0)
+            logger.info(
+                f'Actual match result: {result}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}], CL: {confidence_level}%,'
+                f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
+        else:
+            logger.info(
+                f'Actual match result: {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%,'
+                f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
+
+        logger.info(f'Elo Diff: {elodiff:+0.1f}, ErrMargin: +/- {em:0.1f},'
+                    f' CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}],'
                     f' LOS: {los:0.1f}%, DrawRatio: {100 * dr:0.2f}%')
 
         # Output for match manager.
@@ -846,6 +863,7 @@ def main():
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
     parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
+    parser.add_argument('--elo-objective', action='store_true', help='A flag to enable the elo as objective value instead of the default score rate.')
     parser.add_argument('--noisy-result', action='store_true',
                         help='A flag to replay engine vs engine match when sampler repeats suggesting same parameter values.\n'
                              'When you play an engine vs engine match at fixed depth, generally the result is not noisy.\n'
@@ -895,18 +913,15 @@ def main():
                              '  that failed or pruned will be taken into account.')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
-                        help='A trial pruner used to prune or stop unpromising'
-                             ' trials.\n'
-                             'Example:\n'
-                             'tuner.py --threshold-pruner result=0.45 games=50 interval=1 ...\n'
-                             'Assuming games per trial is 100, after 50 games, check\n'
-                             'the score of the match, if this is below 0.45, then\n'
-                             'prune the trial or stop the engine match. Get new param\n'
-                             'from optimizer and start a new trial.\n'
-                             'Default values:\n'
-                             'result=0.25, games=games_per_trial/2, interval=1\n'
-                             'Example:\n'
-                             'tuner.py --threshold-pruner ...',
+                        help='A trial pruner used to prune or stop unpromising trials. Example:\n'
+                             'tuner.py --games-per-trial 100 --threshold-pruner result=0.45 games=50 interval=1 ...\n'
+                             'After 50 partial games, check the score of the match, if this is below 0.45, then prune\n'
+                             'the trial or stop the engine match, get new param from optimizer and start a new trial.\n'
+                             'Default values: result=0.25, games=games_per_trial/2, interval=1\n'
+                             'If --elo-objective flag is enabled, the result is in Elo, example:\n'
+                             'tuner.py --games-per-trial 100 --elo-objective --threshold-pruner result=-10 ...\n'
+                             'That would mean after 50 partial games, when result is below -10 Elo\n'
+                             'then the trial is pruned, the other 50 games will not be played.',
                         default=None)
     parser.add_argument('--input-param', required=True, type=str,
                         help='The parameters that will be optimized.\n'
@@ -931,13 +946,20 @@ def main():
 
     args = parser.parse_args()
 
+    elo_objective = args.elo_objective
+
     # Check if engine file exists.
     eng_path = Path(args.engine)
     if not eng_path.is_file():
         raise Exception(f'The engine in {eng_path} is missing!')
 
     trials = args.trials
-    init_value = 0.5
+
+    if elo_objective:
+        init_value = 0.0
+    else:
+        init_value = 0.5
+
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = True
     common_param = args.common_param
@@ -957,7 +979,8 @@ def main():
 
     logger.info(f'{__script_name__} {__version__}')
     logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}')
-    logger.info(f'sampler: {args.sampler}\n')
+    logger.info(f'sampler: {args.sampler}')
+    logger.info(f'objective value type: {"Elo" if elo_objective else "score rate"}\n')
 
     # Convert the input param string to a dict of dict and sort by key.
     input_param = ast.literal_eval(args.input_param)
@@ -983,7 +1006,7 @@ def main():
     # threshold after games threshold then prune the trial. Get new param
     # from optimizer and continue with the next trial.
     # --threshold-pruner result=0.45 games=50 --games-per-trial 100 ...
-    pruner, th_pruner = Objective.get_pruner(args.threshold_pruner, games_per_trial)
+    pruner, th_pruner = Objective.get_pruner(args.threshold_pruner, games_per_trial, elo_objective)
 
     logger.info('Starting optimization ...')
 
@@ -1070,7 +1093,7 @@ def main():
                                  args.resign_score, args.draw_movenumber,
                                  args.draw_movecount, args.draw_score,
                                  args.opening_posperfile, n_startup_trials,
-                                 args.noisy_result),
+                                 args.noisy_result, elo_objective),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
