@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.2'
+__version__ = 'v4.0.3'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -680,13 +680,15 @@ class Objective(object):
 
         if self.elo_objective:
             result = round(elodiff, 0)
-            logger.info(
-                f'Actual match result: {self.value_name} {result}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}], CL: {confidence_level}%,'
-                f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
+            cilow = f'{ci_low_elo:+0.1f}'
+            cihigh = f'{ci_high_elo:+0.1f}'
         else:
-            logger.info(
-                f'Actual match result: {self.value_name} {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%,'
-                f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
+            cilow = f'{ci_low_pct:0.5f}'
+            cihigh = f'{ci_high_pct:0.5f}'
+
+        logger.info(f'Actual match result: {self.value_name} {result},'
+                    f' CI: [{cilow}, {cihigh}], CL: {confidence_level}%,'
+                    f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
 
         logger.info(f'Elo Diff: {elodiff:+0.1f}, ErrMargin: +/- {em:0.1f},'
                     f' CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}],'
