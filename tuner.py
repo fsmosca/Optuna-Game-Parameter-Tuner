@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.1'
+__version__ = 'v4.0.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -199,6 +199,7 @@ class Objective(object):
         self.trial_hist_check = self.save_trial_history()
         self.noisy_result = noisy_result
         self.elo_objective = elo_objective
+        self.value_name = 'Elo' if self.elo_objective else 'rate'
 
     def save_trial_history(self):
         ret = {}
@@ -637,8 +638,8 @@ class Objective(object):
                 final_result.append(cur_result)
                 result = Objective.result_mean(final_result)
 
-                logger.info(f'result: {{intermediate: {cur_result}, G/W/D/L: {pgames}/{pwins}/{pdraws}/{plosses}}}')
-                logger.info(f'result: {{average: {result}, G/W/D/L: {games}/{wins}/{draws}/{losses}}}')
+                logger.info(f'result: {{intermediate: {self.value_name} {cur_result}, G/W/D/L: {pgames}/{pwins}/{pdraws}/{plosses}}}')
+                logger.info(f'result: {{average: {self.value_name} {result}, G/W/D/L: {games}/{wins}/{draws}/{losses}}}')
 
                 elo = Elo(wins, losses, draws)
                 elodiff = elo.diff()
@@ -680,11 +681,11 @@ class Objective(object):
         if self.elo_objective:
             result = round(elodiff, 0)
             logger.info(
-                f'Actual match result: {result}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}], CL: {confidence_level}%,'
+                f'Actual match result: {self.value_name} {result}, CI: [{ci_low_elo:+0.1f}, {ci_high_elo:+0.1f}], CL: {confidence_level}%,'
                 f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
         else:
             logger.info(
-                f'Actual match result: {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%,'
+                f'Actual match result: {self.value_name} {result}, CI: [{ci_low_pct:0.5f}, {ci_high_pct:0.5f}], CL: {confidence_level}%,'
                 f' G/W/D/L: {games}/{wins}/{draws}/{losses}, POV: optimizer')
 
         logger.info(f'Elo Diff: {elodiff:+0.1f}, ErrMargin: +/- {em:0.1f},'
