@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.3'
+__version__ = 'v4.0.4'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -1122,11 +1122,8 @@ def main():
             logger.debug('Group count:')
             dfc = df.copy(deep=True)
             dfc = dfc.groupby(h).count()
-            del dfc['state']
-            del dfc['value']
+            dfc = dfc.sort_values(by=h, ascending=False).reset_index(drop=True)
             dfc.rename(columns={'number': 'count'}, inplace=True)
-            logger.debug(dfc)
-            logging.info('')
 
             # Group same param and get the average objective value. Example if trial 1
             # and trial 14 have the same param but trial 1 has objective value of 0.56 and
@@ -1136,12 +1133,17 @@ def main():
             dfg = df.copy(deep=True)
             dfg = dfg.groupby(h).mean().reset_index()
             logger.debug('Mean of objective value on trials with/without same parameters:')
-            dfg = dfg.sort_values(by=['value'], ascending=False).reset_index(drop=True)
+            dfg = dfg.sort_values(by=h, ascending=False).reset_index(drop=True)
             del dfg['number']
             dfg.rename(columns={'value': 'value_mean'}, inplace=True)
+            dfg['count'] = dfc['count']
+            dfg = dfg.sort_values(by=['value_mean', 'count'], ascending=False).reset_index(drop=True)
+            dfg.rename(columns={'count': 'num_trial'}, inplace=True)
+            if elo_objective:
+                dfg['value_mean'] = dfg['value_mean'].round(1)
             logger.debug(dfg.to_string(index=False))
             print('Top mean of objective value on trials with/without same parameters:')
-            print(dfg.head(15))
+            print(f'{dfg.head(15).to_string()}\n')
             logging.info('')
 
         # Show the best param, value and trial number.
