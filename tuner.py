@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.0'
+__version__ = 'v4.0.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -554,7 +554,8 @@ class Objective(object):
 
         # Update trial_hist_check for sampler duplicate suggestions.
         # We update its objective value (0.0 at the moment) after we get the engine vs engine match result.
-        self.trial_hist_check.update({test_param_key: 0.0})
+        temp_result = 0.0 if not self.elo_objective else -800
+        self.trial_hist_check.update({test_param_key: temp_result})
 
         # Add common param. It should not be included in the test param.
         if self.common_param is not None:
@@ -648,7 +649,7 @@ class Objective(object):
                 trial.report(result, played_games)
 
                 if trial.should_prune():
-                    self.trial_hist_check.update({test_param_key: round(result, 5)})
+                    self.trial_hist_check.update({test_param_key: result})
                     raise optuna.TrialPruned()
 
                 if played_games >= self.games_per_trial:
