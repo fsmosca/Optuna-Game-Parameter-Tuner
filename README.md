@@ -75,6 +75,7 @@ Instead of installing each module like optuna, plotly and others. Just install w
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
+Or type `python tuner.py -h`
 
 ## F. Sample command line
 #### Using tpe optimizer
