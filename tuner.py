@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.5'
+__version__ = 'v4.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -793,6 +793,62 @@ def save_plots(study, study_name, input_param, is_plot=False):
     logger.info('Done saving plots.\n')
 
 
+def save_study_log(study, study_name, elo_objective):
+    if not is_panda_ok:
+        return
+
+    df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+    logger.info(f'{df.to_string(index=False)}\n')
+    df.to_csv(f'{study_name}.csv', index=False)
+
+    # Show a frame where same param are grouped and value is averaged.
+    df = df[df['value'].notnull()]  # Remove row with nan value
+    h = list(df)
+    h.remove('value')
+    h.remove('state')
+    h.remove('number')
+
+    # Group same param and get count. Example if trial 1 and trial 14
+    # have the same param but different objective value, the count will be 2.
+    logger.debug('Group count:')
+    dfc = df.copy(deep=True)
+    dfc = dfc.groupby(h).count()
+    dfc = dfc.sort_values(by=h, ascending=False).reset_index(drop=True)
+    dfc.rename(columns={'number': 'count'}, inplace=True)
+
+    # Group same param and get the average objective value. Example if trial 1
+    # and trial 14 have the same param but trial 1 has objective value of 0.56 and
+    # trial 14 has a value of 0.48, the average will be (0.56+0.48)/2 or 0.52.
+    # The top 5 or so with value above 0.5 can be considered as the best and can
+    # be used in the game verification match.
+    dfg = df.copy(deep=True)
+    dfg = dfg.groupby(h).mean().reset_index()
+    logger.debug('Mean of objective value on trials with/without same parameters:')
+    dfg = dfg.sort_values(by=h, ascending=False).reset_index(drop=True)
+    del dfg['number']
+    dfg.rename(columns={'value': 'value_mean'}, inplace=True)
+    dfg['count'] = dfc['count']
+    dfg = dfg.sort_values(by=['value_mean', 'count'], ascending=False).reset_index(drop=True)
+    dfg.rename(columns={'count': 'num_trial'}, inplace=True)
+    if elo_objective:
+        dfg['value_mean'] = dfg['value_mean'].round(1)
+    logger.debug(dfg.to_string(index=False))
+    print('Top mean of objective value on trials with/without same parameters:')
+    print(f'{dfg.head(15).to_string()}\n')
+    logging.info('')
+
+    # Show the best param, value and trial number.
+    logger.info(f'study best param: {study.best_params}')
+    logger.info(f'study best objective value: {study.best_value}')
+    logger.info(f'study best trial number: {study.best_trial.number}\n')
+
+    # Output for match manager.
+    option_output = ''
+    for k, v in study.best_params.items():
+        option_output += f'option.{k}={v} '
+    logger.info(f'{option_output}\n')
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
@@ -1104,58 +1160,7 @@ def main():
         save_plots(study, study_name, input_param, args.plot)
 
         # Build pandas dataframe, print and save to csv file.
-        if is_panda_ok:
-            df = study.trials_dataframe(attrs=('number', 'value', 'params',
-                                               'state'))
-            logger.info(f'{df.to_string(index=False)}\n')
-            df.to_csv(f'{study_name}.csv', index=False)
-
-            # Show a frame where same param are grouped and value is averaged.
-            df = df[df['value'].notnull()]  # Remove row with nan value
-            h = list(df)
-            h.remove('value')
-            h.remove('state')
-            h.remove('number')
-
-            # Group same param and get count. Example if trial 1 and trial 14
-            # have the same param but different objective value, the count will be 2.
-            logger.debug('Group count:')
-            dfc = df.copy(deep=True)
-            dfc = dfc.groupby(h).count()
-            dfc = dfc.sort_values(by=h, ascending=False).reset_index(drop=True)
-            dfc.rename(columns={'number': 'count'}, inplace=True)
-
-            # Group same param and get the average objective value. Example if trial 1
-            # and trial 14 have the same param but trial 1 has objective value of 0.56 and
-            # trial 14 has a value of 0.48, the average will be (0.56+0.48)/2 or 0.52.
-            # The top 5 or so with value above 0.5 can be considered as the best and can
-            # be used in the game verification match.
-            dfg = df.copy(deep=True)
-            dfg = dfg.groupby(h).mean().reset_index()
-            logger.debug('Mean of objective value on trials with/without same parameters:')
-            dfg = dfg.sort_values(by=h, ascending=False).reset_index(drop=True)
-            del dfg['number']
-            dfg.rename(columns={'value': 'value_mean'}, inplace=True)
-            dfg['count'] = dfc['count']
-            dfg = dfg.sort_values(by=['value_mean', 'count'], ascending=False).reset_index(drop=True)
-            dfg.rename(columns={'count': 'num_trial'}, inplace=True)
-            if elo_objective:
-                dfg['value_mean'] = dfg['value_mean'].round(1)
-            logger.debug(dfg.to_string(index=False))
-            print('Top mean of objective value on trials with/without same parameters:')
-            print(f'{dfg.head(15).to_string()}\n')
-            logging.info('')
-
-        # Show the best param, value and trial number.
-        logger.info(f'study best param: {study.best_params}')
-        logger.info(f'study best objective value: {study.best_value}')
-        logger.info(f'study best trial number: {study.best_trial.number}\n')
-
-        # Output for match manager.
-        option_output = ''
-        for k, v in study.best_params.items():
-            option_output += f'option.{k}={v} '
-        logger.info(f'{option_output}\n')
+        save_study_log(study, study_name, elo_objective)
 
 
 if __name__ == "__main__":
