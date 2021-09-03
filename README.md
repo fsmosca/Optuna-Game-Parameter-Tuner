@@ -49,10 +49,10 @@ Instead of installing each module like optuna, plotly and others. Just install w
 6. Run a new match, goto step 3.
 7. You can extend the study or optimization by running the study again using the same study_name and conditions.
 
-## D. Supported optimizers
+## D. Supported Samplers/Optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
-* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html#optuna.samplers.CmaEsSampler) or Covariance Matrix Adaptation Evolution Strategy
-* [skopt](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
+* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html) or Covariance Matrix Adaptation Evolution Strategy
+* [SKOPT](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
   * acquisition_function
     * LCB
       * kappa=1.96, default
@@ -66,12 +66,16 @@ Instead of installing each module like optuna, plotly and others. Just install w
       * xi = 0.01, default
       * xi = 10000, explore
       * xi = 0.0001, exploit
-    * gp_hedge
+    * gp_hedge (default)
   * base_estimator
     * GP - Gaussian Process
     * RF - Random Forest
     * ET - Extra Tree
     * GBRT - Gradient Boosted Regression Trees
+  * acq_optimizer
+    * auto
+    * sampling
+    * lbfgs
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
