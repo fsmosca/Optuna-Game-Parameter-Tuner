@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.0.4'
+__version__ = 'v4.0.5'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -43,7 +43,7 @@ logger.addHandler(fh)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-ch.setFormatter(logging.Formatter('%(asctime)s | %(levelname)-5.5s | %(message)s'))
+ch.setFormatter(logging.Formatter('%(message)s'))
 logger.addHandler(ch)
 
 
