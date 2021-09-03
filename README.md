@@ -42,16 +42,12 @@ Instead of installing each module like optuna, plotly and others. Just install w
   
 ## C. Basic optimization process outline
 1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
-2. Setup a game match between 2 engines. Test engine and base engine. Test engine will use the parameters suggested by optuna optimizer while base engine will use the initial default parameter values. In the beginning the best parameter is the initial parameter. The test engine will use the initial parameter values suggested by the optimimzer.
-3. After a match of say 24 games, the score of test engine will be sent to the optimizer. The score is just (wins+draw/2)/24 from the point of view of the test engine. If the test engine wins (score > 0.5), update the best parameter to the parameter used by test engine. Increment trial by 1.
-4. Check the number of trials done. If trial >= max_trial stop the optimization. This is done by the optimizer.
+2. Setup a game match between 2 engines, the test engine and base engine. The test engine will use the parameters suggested by optuna optimizer while the base engine will use the initial or default parameter values. In the beginning the best parameter is the initial parameter. The test engine will use the initial parameter values suggested by the optimimzer.
+3. After a match of say 24 games, the result of test engine will be sent to the optimizer. The result can be a score rate like (wins+draw/2)/24 or an Elo from the point of view of the test engine. If the test engine wins (score > 0.5) or elo > 0.0, update the best parameter to the parameter used by test engine.
+4. Check the number of trials done. If trial >= max_trial stop the optimization and save the plots. This is automatically done by the optimizer.
 5. Get the new parameter values suggested by the optimizer. This will be used by the test engine.
-6. Run a new match  
-  a. The base engine will use the best parameter while the test engine will use the new parameter values suggested by the optimizer.  
-  b. The base engine will always use the initial or default parameter values while the test engine will use the new parameter values suggested by the optimizer.
-7. Goto step 3.
-8. When max_trial is reached, optimization is stopped and png plots will be saved.
-9. You can extend the trials or optimization by running the study again using the same study_name.
+6. Run a new match, goto step 3.
+7. You can extend the study or optimization by running the study again using the same study_name and conditions.
 
 ## D. Supported optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
