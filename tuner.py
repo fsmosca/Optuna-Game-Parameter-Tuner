@@ -10,11 +10,12 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.1.0'
+__version__ = 'v4.1.1'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
 import sys
+import time
 from subprocess import Popen, PIPE
 import copy
 from collections import OrderedDict
@@ -522,6 +523,7 @@ class Objective(object):
     def __call__(self, trial):
         logger.info('')
         logger.info(f'starting trial: {trial.number} ...')
+        start_time = time.perf_counter()
 
         # Options for test engine.
         test_options = ''
@@ -651,6 +653,10 @@ class Objective(object):
 
                 if trial.should_prune():
                     self.trial_hist_check.update({test_param_key: result})
+                    elapse = time.perf_counter() - start_time
+                    m, s = divmod(elapse, 60)
+                    h, m = divmod(m, 60)
+                    logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
                     raise optuna.TrialPruned()
 
                 if played_games >= self.games_per_trial:
@@ -750,6 +756,10 @@ class Objective(object):
                     self.best_value = result
 
         logger.info(f'result sent to optimizer: {result}')
+        elapse = time.perf_counter() - start_time
+        m, s = divmod(elapse, 60)
+        h, m = divmod(m, 60)
+        logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
 
         return result
 
