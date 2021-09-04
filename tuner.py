@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.1.1'
+__version__ = 'v4.1.2'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -653,10 +653,7 @@ class Objective(object):
 
                 if trial.should_prune():
                     self.trial_hist_check.update({test_param_key: result})
-                    elapse = time.perf_counter() - start_time
-                    m, s = divmod(elapse, 60)
-                    h, m = divmod(m, 60)
-                    logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
+                    elapse_time(time.perf_counter() - start_time)
                     raise optuna.TrialPruned()
 
                 if played_games >= self.games_per_trial:
@@ -756,10 +753,7 @@ class Objective(object):
                     self.best_value = result
 
         logger.info(f'result sent to optimizer: {result}')
-        elapse = time.perf_counter() - start_time
-        m, s = divmod(elapse, 60)
-        h, m = divmod(m, 60)
-        logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
+        elapse_time(time.perf_counter() - start_time)
 
         return result
 
@@ -857,6 +851,12 @@ def save_study_log(study, study_name, elo_objective):
     for k, v in study.best_params.items():
         option_output += f'option.{k}={v} '
     logger.info(f'{option_output}\n')
+
+
+def elapse_time(seconds):
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
 
 
 def main():
