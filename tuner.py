@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.1.3'
+__version__ = 'v4.1.4'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -523,7 +523,7 @@ class Objective(object):
     def __call__(self, trial):
         logger.info('')
         logger.info(f'starting trial: {trial.number} ...')
-        logger.info(f'deterministic function: {self.noisy_result}')
+        logger.info(f'deterministic function: {not self.noisy_result}')
         start_time = time.perf_counter()
 
         # Options for test engine.
