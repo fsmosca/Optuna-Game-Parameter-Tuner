@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.1.4'
+__version__ = 'v4.1.5'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -611,7 +611,10 @@ class Objective(object):
         if not self.fix_base_param:
             logger.info(f'best value threshold: {self.best_value_threshold}')
         logger.info(f'study best param: {self.best_param}')
-        logger.info(f'study best objective value: {self.best_value}')
+        if self.elo_objective:
+            logger.info(f'study best objective value: Elo {self.best_value}')
+        else:
+            logger.info(f'study best objective value: {self.best_value}')
         logger.info(f'study best trial number: {self.study.best_trial.number}')
 
         # Run engine vs engine match.
@@ -844,7 +847,10 @@ def save_study_log(study, study_name, elo_objective):
 
     # Show the best param, value and trial number.
     logger.info(f'study best param: {study.best_params}')
-    logger.info(f'study best objective value: {study.best_value}')
+    if elo_objective:
+        logger.info(f'study best objective value: Elo {study.best_value}')
+    else:
+        logger.info(f'study best objective value: {study.best_value}')
     logger.info(f'study best trial number: {study.best_trial.number}\n')
 
     # Output for match manager.
