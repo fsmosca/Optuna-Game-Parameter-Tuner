@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.1.6'
+__version__ = 'v4.2.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -793,10 +793,15 @@ def save_plots(study, study_name, input_param, is_plot=False):
     fig.update_layout(paper_bgcolor=bg)
     fig.write_image(f'{pre_name}_parallel.png')
 
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.update_layout(paper_bgcolor=bg)
-    fig.data[0]["texttemplate"] = "%{text:.5f}"
-    fig.write_image(f'{pre_name}_importance.png')
+    try:
+        fig = optuna.visualization.plot_param_importances(study)
+    except ValueError as err:
+        # Optuna v2.9.1, ValueError: Cannot evaluate parameter importances with only a single trial
+        logger.exception(err)
+    else:
+        fig.update_layout(paper_bgcolor=bg)
+        fig.data[0]["texttemplate"] = "%{text:.5f}"
+        fig.write_image(f'{pre_name}_importance.png')
 
     logger.info('Done saving plots.\n')
 
