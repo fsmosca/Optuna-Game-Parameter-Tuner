@@ -7,24 +7,24 @@
 ::   Be sure to activate your virtual environment so that the modules used by tuner.py will be imported without issues.
 
 
-:: --sampler=tpe
+:: --sampler name=tpe
 ::   This optimization uses the tpe sampler. Optuna has some samplers to use.
 ::   https://github.com/fsmosca/Optuna-Game-Parameter-Tuner#d-supported-optimizers
 ::   type tuner.py --help to see samplers supported by this tuner.
+::   Examples:
+::   --sampler name=cmaes
+::   or
+::   --sampler name=skopt
 
 
-:: --initial-best-value 0.53
-::   This is the value that the optimizer should attempt to exceed in order
-::   for the param values suggested by the optimizer to become the best param. To get the objective value
-::   we match testengine vs baseengine, where testengine will use the param values suggested by the optimizer
-::   whereas the baseengine will use the default or init param of the engine. Initially the best param is the init param.
-::   The match will be done with GAMESPERTRIAL at a time control of --base-time-sec and --inc-time-sec values.
-::   Result which is (wins + (draws/2)) / GAMESPERTRIAL from testengine perspective is then sent to the optimizer
-::   after which we aks again another param value to try for the next trial. The optimization will be done after
-::   completing the NUMTRIALS.
-::   When the result of the match is more than --initial-best-value value the param values used in testengine will become
-::   the best param, and this best param will be used by the baseengine. For next trial we ask the optimizer for
-::   a new param for testengine, then make a match testengine vs baseengine.
+:: --games-per-trial
+::   The number of games to be played to determine the objective value. More games is better, typically 500 or more.
+
+
+:: --trials
+::   Number of trials to be performed. If there are more parameters and wide range of parameter values, trials
+::   should be increased. When number of trials are completed, you can extend the study by runnning again the same
+::   batch file.
 
 
 :: --threshold-pruner result=0.45
@@ -39,6 +39,11 @@
 ::   If your processor has more threads of say 16, you may use 12 to complete the match faster.
 
 
+:: --base-time-sec
+::   The base time cotrol used during engine vs engine match. It is better to use a high number of base time especially
+::   when the parameter to be optimized is a search parameter.
+
+
 :: --plot
 ::   After every 10 trials are completed, plots will be generated, and can be found in visuals folder.
 ::   Filenames will be <study_name>_<trial_number><plot_type>.png
@@ -47,13 +52,6 @@
 
 :: It is better to use high GAMESPERTRIAL value to lower the uncentainty of the match result. A high value of --initial-best-value
 ::   also helps in finding the best param with high centainty and also eliminates the noise in engine vs engine match.
-
-
-:: More NUMTRIALS are needed if there are more param to be optimized. Currently we have 4, HawkValueMg, HawkValueEg, UnicornValueMg and UnicornValueEg.
-
-
-:: Higher --base-time-sec is better or close to what the engine will be tested in a real world,
-::   but it may take time to complete a single trial.
 
 
 :: When the optimizer could not suggest a better param values meaning that it could not exceed the --initial-best-value value then
@@ -71,17 +69,17 @@
 
 :: Modify options here
 set COMBO=hawk_unicorn
-set CONCURRENCY=6
-set GAMESPERTRIAL=300
+set CONCURRENCY=1
+set GAMESPERTRIAL=24
 set NUMTRIALS=100
 set SAMPLER=tpe
 
 
 python -u tuner.py --study-name musketeer_%COMBO%_piecevalues_tpe ^
---sampler name=%SAMPLER% --initial-best-value 0.53 ^
+--sampler name=%SAMPLER% ^
 --games-per-trial %GAMESPERTRIAL% --trials %NUMTRIALS% ^
 --concurrency %CONCURRENCY% ^
---base-time-sec 15 ^
+--base-time-sec 2 ^
 --inc-time-sec 0.05 ^
 --draw-movenumber 30 --draw-movecount 6 --draw-score 0 ^
 --resign-movecount 3 --resign-score 500 ^
@@ -90,6 +88,4 @@ python -u tuner.py --study-name musketeer_%COMBO%_piecevalues_tpe ^
 --opening-file ./start_opening/musketeer/hawk_unicorn_startpos.fen ^
 --variant musketeer --match-manager duel --threshold-pruner result=0.45 ^
 --plot
-
-pause
 
