@@ -27,7 +27,7 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
   
 #### Visualization
 * pip install plotly
-* pip install sklearn
+* pip install scikit-learn==0.24.2
 * pip install kaleido
 
 #### Save studies to pandas dataframe and csv file
