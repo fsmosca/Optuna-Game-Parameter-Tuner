@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v4.3.0'
+__version__ = 'v5.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -476,6 +476,9 @@ class Objective(object):
                 skopt_kwargs=skopt_kwargs,
                 consider_pruned_trials=consider_pruned_trials,
                 n_startup_trials=n_startup_trials), n_startup_trials
+
+        if name == 'botorch':
+            return optuna.integration.BoTorchSampler(), n_startup_trials
 
         logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
         raise
@@ -989,7 +992,10 @@ def main():
                              '  skopt has also a consider_pruned_trials parameter which is true by default. To not consider pruned trials use:\n'
                              '  --sampler name=skopt consider_pruned_trials=false ...\n'
                              '  consider_pruned_trials means that during sampling or finding the next best param values, the parameters\n'
-                             '  that failed or pruned will be taken into account.')
+                             '  that failed or pruned will be taken into account.\n'
+                             '--sampler name=botorch\n'
+                             '  A sampler based on BoTorch or Bayesian Optimization in PyTorch.\n'
+                             '  Ref.: https://github.com/pytorch/botorch')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising trials. Example:\n'
