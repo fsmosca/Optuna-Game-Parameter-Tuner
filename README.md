@@ -36,6 +36,9 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 #### To use skopt sampler
 * pip install scikit-optimize
 
+#### To use botorch
+* pip install botorch
+
 #### Install all dependencies
 Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
 * pip install -r requirements.txt
@@ -51,6 +54,7 @@ Instead of installing each module like optuna, plotly and others. Just install w
 
 ## D. Supported Samplers/Optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
+* [BOTorch](https://github.com/pytorch/botorch) or Bayesian Optimization in PyTorch.
 * [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html) or Covariance Matrix Adaptation Evolution Strategy
 * [SKOPT](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
   * acquisition_function
