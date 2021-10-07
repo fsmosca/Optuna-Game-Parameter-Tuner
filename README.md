@@ -100,6 +100,28 @@ Our objective function result is the result of engine vs engine match. There are
 
 There is a flag that play a match for repeated parameter suggestions and it is called `--noisy-result`. This is mainly applied when more than one same parameter matches produces different results this is called non-determinisitic or stochastic result. An example situation is when you play a match with a time control instead of fixed depth. Conduct a match #1 at time control of 5s+100ms for 100 games with opening set #1, then do match #2 with opening set #2, most likely the result is not the same. Note that during matches each opening is played twice. In this case it is better to add the `--noisy-result` flag in the command line.
 
+An example log when `--noisy-result` flag is enabled and sampler repeats suggesting param values. Objective value type is elo with `--elo-objective` flag.  
+```python
+starting trial: 149 ...
+deterministic function: False
+Duplicate suggestion from sampler, {'Pp2': 10, 'Pp6': 3}
+Execute engine match as --noisy-result flag is enabled.
+suggested param for test engine: {'Pp2': 10, 'Pp6': 3}
+param for base engine          : {'Pp2': 7, 'Pp6': 2}
+common param: {'Hash': 128, 'EvalHash': 4}
+init param: {'Pp2': 7, 'Pp6': 2}
+init objective value: 0.0
+study best param: {'Pp2': 10, 'Pp6': 1}
+study best objective value: Elo 124.0
+study best trial number: 1
+Actual match result: Elo 22.0, CI: [-75.9, +119.4], CL: 95%, G/W/D/L: 32/11/12/9, POV: optimizer
+Elo Diff: +21.7, ErrMargin: +/- 97.6, CI: [-75.9, +119.4], LOS: 67.3%, DrawRatio: 37.50%
+test param format for match manager: option.Pp2=10 option.Pp6=3
+result sent to optimizer: 22.0
+elapse: 0h:0m:19s
+Trial 149 finished with value: 22.0 and parameters: {'Pp2': 10, 'Pp6': 3}. Best is trial 1 with value: 124.0.
+```
+
 #### Command line with float parameter values
 Add a key value pair of `'type': 'float'`
 ```python
