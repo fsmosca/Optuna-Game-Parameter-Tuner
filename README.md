@@ -91,6 +91,15 @@ Or type `python tuner.py -h`
 python tuner.py --sampler name=tpe --engine ./engines/deuterium/deuterium --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}}" --games-per-trial 24 --plot --base-time-sec 15 --inc-time-sec 0.1 --study-name study1 --pgn-output study1.pgn --trials 100 --common-param "{'Hash': 128}"
 ```
 
+#### Use Elo as objective value instead of score rate
+Use the flag  
+`--elo-objective`
+
+#### Deterministic and Non-Deterministic objective function
+Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE, CMAES, SKOPT and BOTorch may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
+
+There is a flag that play a match for repeated parameter suggestions and it is called `--noisy-result`. This is mainly applied when more than one same parameter matches produces different results this is called non-determinisitic or stochastic result. An example situation is when you play a match with a time control instead of fixed depth. Conduct a match #1 at time control of 5s+100ms for 100 games with opening set #1, then do match #2 with opening set #2, most likely the result is not the same. Note that during matches each opening is played twice. In this case it is better to add the `--noisy-result` flag in the command line.
+
 #### Command line with float parameter values
 Add a key value pair of `'type': 'float'`
 ```python
