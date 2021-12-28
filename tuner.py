@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v5.1.0'
+__version__ = 'v5.2.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -330,7 +330,7 @@ class Objective(object):
         return sum(data)/len(data)
 
     @staticmethod
-    def get_sampler(args_sampler):
+    def get_sampler(args_sampler, input_param):
         n_startup_trials = 10
 
         if args_sampler is None:
@@ -347,6 +347,41 @@ class Objective(object):
         if name is None:
             logger.warning('Sampler name is not defined, use tpe sampler.')
             return optuna.samplers.TPESampler()
+
+        if name == 'grid':
+            search_space = {}
+            for k, v in input_param.items():
+                stepv = 1
+                typev = None
+                minv = v['min']
+                maxv = v['max']
+
+                if 'step' in v:
+                    stepv = v['step']
+                if 'type' in v:
+                    typev = v['type']
+
+                if typev is None or typev != 'float':  # integer value
+                    search_space.update({k: list(range(minv, maxv+1, stepv))})  # {par1: [1, 2, 3 ...], par2: [2, 8, 10]}
+                else:  # float value
+                    val = [minv]
+                    tmp = minv
+                    is_save_max = False
+                    while True:
+                        v = tmp + stepv
+                        if v <= maxv:
+                            val.append(round(v, 5))
+                            tmp = v
+                            if v == maxv:
+                                is_save_max = True
+                        else:
+                            # Always save the maxv even if it is not reachable in the step.
+                            if not is_save_max:
+                                val.append(round(maxv, 5))
+                            break
+                    search_space.update({k: val})
+            logger.debug(f'search_space: {search_space}')
+            return optuna.samplers.GridSampler(search_space), n_startup_trials
 
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
         if name == 'tpe':
@@ -539,7 +574,7 @@ class Objective(object):
                 param_type = 'int'
 
             if param_type == 'float':
-                par_val = trial.suggest_float(k, v['min'], v['max'], step=v['step'])
+                par_val = round(trial.suggest_float(k, v['min'], v['max'], step=v['step']), 5)
             # Otherwise use integer.
             else:
                 par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
@@ -974,6 +1009,7 @@ def main():
                              '--sampler name=tpe n_ei_candidates=50 multivariate=true group=true seed=100 constant_liar=true n_startup_trials=6 ...\n'
                              '  default values: n_ei_candidates=24, multivariate=false, group=false, seed=None, constant_liar=false, n_startup_trials=10\n'
                              '  TPE ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html\n'
+                             '--sampler name=grid\n'
                              '--sampler name=cmaes sigma0=20 n_startup_trials=6 seed=100 ...\n'
                              '  default values: sigma0 or initial std deviation is None, n_startup_trials=1, seed=None.\n'
                              '  This tells cmaes that optimal parameter values\n'
@@ -1088,7 +1124,7 @@ def main():
     cycle = 0
 
     # Define sampler to use, default is TPE.
-    sampler, n_startup_trials = Objective.get_sampler(args.sampler)
+    sampler, n_startup_trials = Objective.get_sampler(args.sampler, input_param)
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after games threshold then prune the trial. Get new param
