@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v5.0.0'
+__version__ = 'v5.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -905,6 +905,9 @@ def main():
     parser.add_argument('--trials', required=False, type=int,
                         help='Trials to try, default=1000.',
                         default=1000)
+    parser.add_argument('--direction', required=False, type=str,
+                        help='Objective direction can be minimize or maximize, default=maximize.',
+                        default='maximize')
     parser.add_argument('--concurrency', required=False, type=int,
                         help='Number of game matches to run concurrently, default=1.',
                         default=1)
@@ -1100,7 +1103,7 @@ def main():
 
         # Define study.
         study = optuna.create_study(study_name=study_name,
-                                    direction='maximize',
+                                    direction=args.direction,
                                     storage=f'sqlite:///{storage_file}',
                                     load_if_exists=True, sampler=sampler,
                                     pruner=pruner)
