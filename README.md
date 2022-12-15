@@ -22,7 +22,7 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 ### General setup guide
 
 #### Required
-* Install python 3.8 or higher
+* Install python 3.8 or 3.9
   * Visit https://www.python.org/downloads/
 * Install optuna
   * pip install optuna
