@@ -1,5 +1,5 @@
 # Optuna Game Parameter Tuner
-[![Python 3.8](https://img.shields.io/badge/Python-%203.8%20%7C%203.9%20-cyan.svg)](https://www.python.org/downloads/release/python-380/)
+[![Python 3.9](https://img.shields.io/badge/Python-%203.9%20%7C%203.10%20-cyan.svg)](https://www.python.org/downloads/release/python-390/)
 
 A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants. Engine evaluation parameters that can be optimized are piece values like pawn value or knight value and others. Search parameters that can be optimized are futility pruning margin, null move reduction factors and others. 
 
@@ -32,24 +32,21 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 ### General setup guide
 
 #### Required
-* Install python 3.8 or 3.9
+* Install python 3.9 or 3.10
   * Visit https://www.python.org/downloads/
 * Install optuna
-  * pip install optuna==2.10.0
+  * pip install optuna==3.0.4
   
 #### Visualization
-* pip install plotly==4.10.0
-* pip install scikit-learn==0.24.2
-* pip install kaleido==0.0.3.post1
+* pip install plotly==5.11.0
+* pip install scikit-learn==1.2.0
+* pip install kaleido==0.2.1
 
 #### Save studies to pandas dataframe and csv file
-* pip install pandas==1.1.2
+* pip install pandas==1.5.2
 
 #### To use skopt sampler
-* pip install scikit-optimize==0.8.1
-
-#### To use botorch
-* pip install botorch==0.5.1
+* pip install scikit-optimize==0.9.0
 
 #### Install all dependencies
 
@@ -67,7 +64,6 @@ Instead of installing each module like optuna, plotly and others. Just install w
 
 ## D. Supported Samplers/Optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
-* [BOTorch](https://github.com/pytorch/botorch) or Bayesian Optimization in PyTorch.
 * [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html) or Covariance Matrix Adaptation Evolution Strategy
 * [SKOPT](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
   * acquisition_function
@@ -109,7 +105,7 @@ Use the flag
 `--elo-objective`
 
 #### Deterministic and Non-Deterministic objective function
-Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE, CMAES, SKOPT and BOTorch may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
+Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE, CMAES, and SKOPT may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
 
 There is a flag that play a match for repeated parameter suggestions and it is called `--noisy-result`. This is mainly applied when more than one same parameter matches produces different results this is called non-determinisitic or stochastic result. An example situation is when you play a match with a time control instead of fixed depth. Conduct a match #1 at time control of 5s+100ms for 100 games with opening set #1, then do match #2 with opening set #2, most likely the result is not the same. Note that during matches each opening is played twice. In this case it is better to add the `--noisy-result` flag in the command line.
 
