@@ -25,21 +25,21 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 * Install python 3.8 or 3.9
   * Visit https://www.python.org/downloads/
 * Install optuna
-  * pip install optuna
+  * pip install optuna==2.10.0
   
 #### Visualization
-* pip install plotly
+* pip install plotly==4.10.0
 * pip install scikit-learn==0.24.2
-* pip install kaleido
+* pip install kaleido==0.0.3.post1
 
 #### Save studies to pandas dataframe and csv file
-* pip install pandas
+* pip install pandas==1.1.2
 
 #### To use skopt sampler
-* pip install scikit-optimize
+* pip install scikit-optimize==0.8.1
 
 #### To use botorch
-* pip install botorch
+* pip install botorch==0.5.1
 
 #### Install all dependencies
 Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
