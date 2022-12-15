@@ -1,4 +1,6 @@
 # Optuna Game Parameter Tuner
+[![Python 3.8](https://img.shields.io/badge/Python-%203.8%20%7C%203.9%20-cyan.svg)](https://www.python.org/downloads/release/python-380/)
+
 A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants. Engine evaluation parameters that can be optimized are piece values like pawn value or knight value and others. Search parameters that can be optimized are futility pruning margin, null move reduction factors and others. 
 
 ## A. Optimization plots
