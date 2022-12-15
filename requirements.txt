@@ -1,8 +1,6 @@
-optuna==2.10.0
-plotly==4.10.0
-scikit-learn==0.24.2
-kaleido==0.0.3.post1
-scikit-learn==0.24.2
-scikit-optimize==0.8.1
-pandas==1.1.2
-botorch==0.5.1
+optuna==3.0.4
+plotly==5.11.0
+scikit-learn==1.2.0
+kaleido==0.2.1
+scikit-optimize==0.9.0
+pandas==1.5.2

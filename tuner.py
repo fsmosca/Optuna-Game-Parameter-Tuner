@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v5.3.0'
+__version__ = 'v6.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -27,7 +27,7 @@ import logging
 import math
 
 import optuna
-from optuna.distributions import IntUniformDistribution, DiscreteUniformDistribution
+from optuna.distributions import IntDistribution, FloatDistribution
 
 
 logger = logging.getLogger()
@@ -477,9 +477,6 @@ class Objective(object):
                 consider_pruned_trials=consider_pruned_trials,
                 n_startup_trials=n_startup_trials), n_startup_trials
 
-        if name == 'botorch':
-            return optuna.integration.BoTorchSampler(), n_startup_trials
-
         logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
         raise
 
@@ -542,7 +539,7 @@ class Objective(object):
                 par_val = round(trial.suggest_float(k, v['min'], v['max'], step=v['step']), 5)
             # Otherwise use integer.
             else:
-                par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
+                par_val = trial.suggest_int(k, v['min'], v['max'], step=v['step'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
 
@@ -995,10 +992,7 @@ def main():
                              '  skopt has also a consider_pruned_trials parameter which is true by default. To not consider pruned trials use:\n'
                              '  --sampler name=skopt consider_pruned_trials=false ...\n'
                              '  consider_pruned_trials means that during sampling or finding the next best param values, the parameters\n'
-                             '  that failed or pruned will be taken into account.\n'
-                             '--sampler name=botorch\n'
-                             '  A sampler based on BoTorch or Bayesian Optimization in PyTorch.\n'
-                             '  Ref.: https://github.com/pytorch/botorch')
+                             '  that failed or pruned will be taken into account.')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising trials. Example:\n'
@@ -1145,9 +1139,9 @@ def main():
 
             for k, v in input_param.items():
                 if 'type' in v and v['type'] == 'float':
-                    distri.update({k: DiscreteUniformDistribution(v['min'], v['max'], v['step'])})
+                    distri.update({k: FloatDistribution(v['min'], v['max'], log=False, step=v['step'])})
                 else:
-                    distri.update({k: IntUniformDistribution(v['min'], v['max'], v['step'])})
+                    distri.update({k: IntDistribution(v['min'], v['max'], log=False, step=v['step'])})
 
             init_trial = optuna.trial.create_trial(
                 params=copy.deepcopy(init_param),
