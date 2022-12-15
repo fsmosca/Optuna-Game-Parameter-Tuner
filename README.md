@@ -16,6 +16,16 @@ A game search and evaluation parameter tuner using optuna framework. The game ca
 
 ## B. Setup
 
+### Copy the whole repository
+
+From command line:  
+
+* git clone https://github.com/fsmosca/Optuna-Game-Parameter-Tuner.git
+
+```
+PS F:\Tmp> git clone https://github.com/fsmosca/Optuna-Game-Parameter-Tuner.git
+```
+
 ### Install on virtual environment on Windows 10
 See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-10-setup) from wiki.
 
@@ -42,6 +52,7 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 * pip install botorch==0.5.1
 
 #### Install all dependencies
+
 Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
 * pip install -r requirements.txt
   
