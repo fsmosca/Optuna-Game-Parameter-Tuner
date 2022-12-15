@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v5.3.0'
+__version__ = 'v6.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -27,7 +27,7 @@ import logging
 import math
 
 import optuna
-from optuna.distributions import IntUniformDistribution, DiscreteUniformDistribution
+from optuna.distributions import IntDistribution, FloatDistribution
 
 
 logger = logging.getLogger()
@@ -542,7 +542,7 @@ class Objective(object):
                 par_val = round(trial.suggest_float(k, v['min'], v['max'], step=v['step']), 5)
             # Otherwise use integer.
             else:
-                par_val = trial.suggest_int(k, v['min'], v['max'], v['step'])
+                par_val = trial.suggest_int(k, v['min'], v['max'], step=v['step'])
             test_options += f'option.{k}={par_val} '
             self.test_param.update({k: par_val})
 
@@ -1145,9 +1145,9 @@ def main():
 
             for k, v in input_param.items():
                 if 'type' in v and v['type'] == 'float':
-                    distri.update({k: DiscreteUniformDistribution(v['min'], v['max'], v['step'])})
+                    distri.update({k: FloatDistribution(v['min'], v['max'], log=False, step=v['step'])})
                 else:
-                    distri.update({k: IntUniformDistribution(v['min'], v['max'], v['step'])})
+                    distri.update({k: IntDistribution(v['min'], v['max'], log=False, step=v['step'])})
 
             init_trial = optuna.trial.create_trial(
                 params=copy.deepcopy(init_param),
