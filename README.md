@@ -147,7 +147,52 @@ Add a key value pair of `'type': 'float'`
 * [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison)
 * [Performance comparison between tpe multivariate and cmaes](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison-between-tpe-multivariate-and-cmaes)
 
-## H. Credits
+## H. Optuna dashboard
+
+Trials can be viewed from the dashboard.
+
+```
+pip install optuna-dashboard
+```
+
+**Sample command line**
+
+Take note on the study-name. We will use that in the dashboard.
+
+```
+python tuner.py --study-name cdrill2000_razor_testpos --sampler name=skopt acquisition_function=LCB --engine "F:/Project/my_cdrill/cdrill2000.exe" ^
+--concurrency 4 ^
+--opening-file ./start_opening/ogpt_chess_startpos.epd ^
+--opening-format epd ^
+--input-param "{'RazorMargin': {'default':200, 'min':30, 'max':300, 'step':5}, 'PassedPawnWeight': {'default':100, 'min':30, 'max':500, 'step':5}}" ^
+--base-time-sec 10 ^
+--inc-time-sec 0.1 ^
+--draw-movenumber 30 --draw-movecount 6 --draw-score 0 ^
+--resign-movecount 3 --resign-score 500 ^
+--games-per-trial 100 --trials 100 --plot ^
+--pgn-output cdrill200_razor_test_games.pgn ^
+--elo-objective ^
+--noisy-result
+```
+
+From the command line the study name is `cdrill2000_razor_testpos`. A trial database will be created with the name `cdrill2000_razor_testpos.db` The command line to run dashboard is:
+
+```
+optuna-dashboard sqlite:///cdrill2000_razor_testpos.db
+```
+
+```
+(venv) PS F:\Github\Optuna-Game-Parameter-Tuner> optuna-dashboard sqlite:///cdrill2000_razor_testpos.db
+Listening on http://127.0.0.1:8080/
+Hit Ctrl-C to quit.
+```
+
+Visit `http://127.0.0.1:8080/` on your browser.
+
+![image](https://user-images.githubusercontent.com/22366935/208231724-32d9692a-cf09-4f32-b0d3-97dcb92f0c70.png)
+
+
+## I. Credits
 * Optuna  
 https://github.com/optuna/optuna
 * Cutechess  
