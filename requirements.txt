@@ -1,4 +1,4 @@
-optuna==3.0.4
+optuna==3.0.5
 plotly==5.11.0
 scikit-learn==1.2.0
 kaleido==0.2.1
