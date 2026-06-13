@@ -1,5 +1,5 @@
 # Optuna Game Parameter Tuner
-[![Python 3.9](https://img.shields.io/badge/Python-%203.9%20%7C%203.10%20-cyan.svg)](https://www.python.org/downloads/release/python-390/)
+[![Python 3.9](https://img.shields.io/badge/Python-%203.9%20%7C%203.10%20%7C%203.11%20-cyan.svg)](https://www.python.org/downloads/release/python-390/)
 
 A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants. Engine evaluation parameters that can be optimized are piece values like pawn value or knight value and others. Search parameters that can be optimized are futility pruning margin, null move reduction factors and others. 
 
@@ -32,21 +32,21 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
 ### General setup guide
 
 #### Required
-* Install python 3.9 or 3.10
+* Install python 3.9, 3.10 or 3.11
   * Visit https://www.python.org/downloads/
 * Install optuna
-  * pip install optuna==3.0.4
+  * pip install optuna==4.9.0
   
 #### Visualization
-* pip install plotly==5.11.0
-* pip install scikit-learn==1.2.0
-* pip install kaleido==0.2.1
+Plots are saved as self-contained interactive HTML files in the `visuals` folder (no Chrome or kaleido needed). scikit-learn is required for the parameter-importance plot.
+* pip install plotly==6.8.0
+* pip install scikit-learn==1.9.0
+
+#### To use the cmaes sampler
+* pip install cmaes==0.13.0
 
 #### Save studies to pandas dataframe and csv file
-* pip install pandas==1.5.2
-
-#### To use skopt sampler
-* pip install scikit-optimize==0.9.0
+* pip install pandas==2.3.3
 
 #### Install all dependencies
 
@@ -64,31 +64,7 @@ Instead of installing each module like optuna, plotly and others. Just install w
 
 ## D. Supported Samplers/Optimizers
 * [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
-* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html) or Covariance Matrix Adaptation Evolution Strategy
-* [SKOPT](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html) or [scikit-optimize](https://scikit-optimize.github.io/stable/modules/generated/skopt.optimizer.Optimizer.html#skopt.optimizer.Optimizer)
-  * acquisition_function
-    * LCB
-      * kappa=1.96, default
-      * kappa=10000, explore
-      * kappa=0.0001, exploit
-    * EI
-      * xi = 0.01, default
-      * xi = 10000, explore
-      * xi = 0.0001, exploit
-    * PI
-      * xi = 0.01, default
-      * xi = 10000, explore
-      * xi = 0.0001, exploit
-    * gp_hedge (default)
-  * base_estimator
-    * GP - Gaussian Process
-    * RF - Random Forest
-    * ET - Extra Tree
-    * GBRT - Gradient Boosted Regression Trees
-  * acq_optimizer
-    * auto
-    * sampling
-    * lbfgs
+* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html) or Covariance Matrix Adaptation Evolution Strategy
 
 ## E. Help
 See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
@@ -105,7 +81,7 @@ Use the flag
 `--elo-objective`
 
 #### Deterministic and Non-Deterministic objective function
-Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE, CMAES, and SKOPT may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
+Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE and CMAES may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
 
 There is a flag that play a match for repeated parameter suggestions and it is called `--noisy-result`. This is mainly applied when more than one same parameter matches produces different results this is called non-determinisitic or stochastic result. An example situation is when you play a match with a time control instead of fixed depth. Conduct a match #1 at time control of 5s+100ms for 100 games with opening set #1, then do match #2 with opening set #2, most likely the result is not the same. Note that during matches each opening is played twice. In this case it is better to add the `--noisy-result` flag in the command line.
 
@@ -160,7 +136,7 @@ pip install optuna-dashboard
 Take note on the study-name. We will use that in the dashboard.
 
 ```
-python tuner.py --study-name cdrill2000_razor_testpos --sampler name=skopt acquisition_function=LCB --engine "F:/Project/my_cdrill/cdrill2000.exe" ^
+python tuner.py --study-name cdrill2000_razor_testpos --sampler name=tpe --engine "F:/Project/my_cdrill/cdrill2000.exe" ^
 --concurrency 4 ^
 --opening-file ./start_opening/ogpt_chess_startpos.epd ^
 --opening-format epd ^
