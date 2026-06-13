@@ -21,6 +21,7 @@ import copy
 from collections import OrderedDict
 import argparse
 from pathlib import Path
+import shlex
 import ast
 from typing import List, Union
 import logging
@@ -249,9 +250,13 @@ class Objective(object):
 
     def get_match_commands(self, test_options, base_options, games):
         if self.match_manager == 'cutechess':
-            tour_manager = Path(Path.cwd(), './tourney_manager/cutechess/cutechess-cli.exe')
+            exe_name = 'cutechess-cli.exe' if sys.platform == 'win32' else 'cutechess-cli'
+            bundled = Path(Path.cwd(), 'tourney_manager', 'cutechess', exe_name)
+            # The repo ships a Windows cutechess-cli.exe; use it when present.
+            # On Linux fall back to a cutechess-cli found on PATH.
+            tour_manager = bundled if bundled.is_file() else exe_name
         else:
-            tour_manager = 'python -u ./tourney_manager/duel/duel.py'
+            tour_manager = f'"{sys.executable}" -u ./tourney_manager/duel/duel.py'
 
         command = f' -concurrency {self.concurrency}'
 
@@ -312,7 +317,13 @@ class Objective(object):
             test_options, base_options, games)
 
         # Execute the command line to start the match.
-        process = Popen(str(tour_manager) + command, stdout=PIPE, text=True)
+        full_command = str(tour_manager) + command
+        # On POSIX, Popen treats a string arg as the whole program name and does
+        # not split it into arguments, so tokenize it. On Windows the OS parses
+        # the command string itself, so it is passed through unchanged.
+        if sys.platform != 'win32':
+            full_command = shlex.split(full_command)
+        process = Popen(full_command, stdout=PIPE, text=True)
         for eline in iter(process.stdout.readline, ''):
             line = eline.strip()
             if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
