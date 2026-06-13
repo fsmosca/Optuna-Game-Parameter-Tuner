@@ -393,91 +393,7 @@ class Objective(object):
             return optuna.samplers.CmaEsSampler(
                 sigma0=sigma0, seed=seed, n_startup_trials=n_startup_trials), n_startup_trials
 
-        if name == 'skopt':
-            n_startup_trials = 1
-            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.SkoptSampler.html
-
-            # Check acquisition function, It can be:
-            # LCB, or EI, or PI or the default gp_hedge
-            # https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
-            random_state = None
-            skopt_kwargs = {'acq_func': 'gp_hedge', 'random_state': random_state, 'acq_optimizer': 'auto',
-                            'initial_point_generator': 'sobol'}
-            consider_pruned_trials = True
-
-            af_value = ''
-            for opt in args_sampler:
-                for value in opt:
-                    if 'acquisition_function=' in value:
-                        af_value: str = value.split('=')[1]
-
-                        if af_value in ['LCB', 'EI', 'PI', 'gp_hedge']:
-                            skopt_kwargs.update({'acq_func': value.split('=')[1]})
-                        else:
-                            logger.exception(f'Error! acquisition function {af_value} is not supported. Use LCB or EI or PI or gp_hedge.')
-                            raise
-                    elif 'n_startup_trials=' in value:
-                        n_startup_trials = int(value.split('=')[1])
-                    elif 'consider_pruned_trials=' in value:
-                        consider_pruned_trials = True if value.split('=')[1].lower() == 'true' else False
-                    elif 'random_state=' in value:
-                        rs = value.split('=')[1].lower()
-                        if rs == 'none':
-                            random_state = None
-                        else:
-                            random_state = int(rs)
-                        skopt_kwargs.update({'random_state': random_state})
-                    elif 'acq_optimizer=' in value:
-                        # Method to minimize the acquisition function
-                        # can be auto, sampling and lbfgs
-                        skopt_kwargs.update({'acq_optimizer': value.split('=')[1].lower()})
-
-            # Tweak exploration/exploitation.
-            # LCB ->kappa, PI or EI ->xi
-            # If kappa or xi is high, it favors exploration otherwise exploitation.
-            # high: 10000, low: 0.0001
-            # Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py
-            acq_func_kwargs = {}
-
-            if af_value == 'LCB':
-                for opt in args_sampler:
-                    for value in opt:
-                        if 'kappa=' in value:
-                            acq_func_kwargs.update({'acq_func_kwargs': {'kappa': float(value.split('=')[1])}})
-                            break
-            elif af_value == 'EI' or af_value == 'PI':
-                for opt in args_sampler:
-                    for value in opt:
-                        if 'xi=' in value:
-                            acq_func_kwargs.update({'acq_func_kwargs': {'xi': float(value.split('=')[1])}})
-                            break
-
-            if len(acq_func_kwargs) > 0:
-                skopt_kwargs.update(acq_func_kwargs)
-
-            # Add base_estimator options such as GP, RF, ET, GBRT, default=GP.
-            # Ref.: https://scikit-optimize.github.io/stable/modules/generated/skopt.Optimizer.html#skopt.Optimizer
-            for opt in args_sampler:
-                for value in opt:
-                    if 'base_estimator=' in value:
-                        be: str = value.split('=')[1]
-
-                        if be in ['GP', 'RF', 'ET', 'GBRT']:
-                            skopt_kwargs.update({'base_estimator': be})
-                        else:
-                            logger.exception(f'Error! base_estimator {be} is not supported. Use GP or RF or ET or GBRT.'
-                                             f' Or do not write base-estimator at all and it will use GP.')
-                            raise
-                        break
-
-            logger.info(f'skopt_kwargs: {skopt_kwargs}, consider_pruned_trials: {consider_pruned_trials}')
-
-            return optuna.integration.SkoptSampler(
-                skopt_kwargs=skopt_kwargs,
-                consider_pruned_trials=consider_pruned_trials,
-                n_startup_trials=n_startup_trials), n_startup_trials
-
-        logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes or skopt.')
+        logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes.')
         raise
 
     @staticmethod
@@ -777,21 +693,21 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     fig = optuna.visualization.plot_optimization_history(study)
     fig.update_layout(paper_bgcolor=bg)
-    fig.write_image(f'{pre_name}_hist.png')
+    fig.write_html(f'{pre_name}_hist.html')
 
     fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
     fig.update_layout(paper_bgcolor=bg)
-    fig.write_image(f'{pre_name}_slice.png')
+    fig.write_html(f'{pre_name}_slice.html')
 
     fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
     if len(input_param) >= 3:
         fig.update_layout(width=1000 + len(input_param)*200, height=1000 + len(input_param)*200)
     fig.update_layout(paper_bgcolor=bg)
-    fig.write_image(f'{pre_name}_contour.png')
+    fig.write_html(f'{pre_name}_contour.html')
 
     fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
     fig.update_layout(paper_bgcolor=bg)
-    fig.write_image(f'{pre_name}_parallel.png')
+    fig.write_html(f'{pre_name}_parallel.html')
 
     try:
         fig = optuna.visualization.plot_param_importances(study)
@@ -801,7 +717,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     else:
         fig.update_layout(paper_bgcolor=bg)
         fig.data[0]["texttemplate"] = "%{text:.5f}"
-        fig.write_image(f'{pre_name}_importance.png')
+        fig.write_html(f'{pre_name}_importance.html')
 
     logger.info('Done saving plots.\n')
 
@@ -967,7 +883,7 @@ def main():
     parser.add_argument('--sampler', required=False, nargs='*', action='append',
                         metavar=('name=', 'option_name='),
                         help='The sampler to be used in the study, default name=tpe.\n'
-                             'name can be tpe or cmaes or skopt, examples:\n'
+                             'name can be tpe or cmaes, examples:\n'
                              '--sampler name=tpe n_ei_candidates=50 multivariate=true group=true seed=100 constant_liar=true n_startup_trials=6 ...\n'
                              '  default values: n_ei_candidates=24, multivariate=false, group=false, seed=None, constant_liar=false, n_startup_trials=10\n'
                              '  TPE ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html\n'
@@ -975,24 +891,7 @@ def main():
                              '  default values: sigma0 or initial std deviation is None, n_startup_trials=1, seed=None.\n'
                              '  This tells cmaes that optimal parameter values\n'
                              '  lies within init_value +/- 3 * sigma0. By default this value is the parameter minimum_range/6.\n'
-                             '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.integration.PyCmaSampler.html\n'
-                             '--sampler name=skopt acquisition_function=LCB random_state=100 acq_optimizer=lbfgs n_startup_trials=6 ...\n'
-                             '  default values: acquisition_function=gp_hedge, random_state is None, acq_optimizer=auto, can be sampling and lbfgs, n_startup_trials=1\n'
-                             '  acquisition_function can be LCB or EI or PI or gp_hedge\n'
-                             '  Example to explore, with LCB and kappa, high kappa would explore, low would exploit:\n'
-                             '  --sampler name=skopt acquisition_function=LCB kappa=10000\n'
-                             '  Example to exploit, with EI or PI and xi, high xi would explore, low would exploit:\n'
-                             '  --sampler name=skopt acquisition_function=EI xi=0.0001\n'
-                             '  Note: negative xi does not work with PI, but will work with EI.\n'
-                             '  Ref.: https://scikit-optimize.github.io/stable/auto_examples/exploration-vs-exploitation.html#sphx-glr-auto-examples-exploration-vs-exploitation-py\n'
-                             '  skopt has base_estimator options namely: GP, RF, ET and GBRT, default is GP.\n'
-                             '  GP=Gaussian Process, RF=Random Forest, ET=Extra Tree, GBRT=Gradient Boosted Regressor Tree.\n'
-                             '  Example:\n'
-                             '  --sampler name=skopt base_estimator=GBRT acquisition_function=EI ...\n'
-                             '  skopt has also a consider_pruned_trials parameter which is true by default. To not consider pruned trials use:\n'
-                             '  --sampler name=skopt consider_pruned_trials=false ...\n'
-                             '  consider_pruned_trials means that during sampling or finding the next best param values, the parameters\n'
-                             '  that failed or pruned will be taken into account.')
+                             '  ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html\n')
     parser.add_argument('--threshold-pruner', required=False, nargs='*', action='append',
                         metavar=('result=', 'games='),
                         help='A trial pruner used to prune or stop unpromising trials. Example:\n'
