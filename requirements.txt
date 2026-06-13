@@ -1,7 +1,6 @@
-optuna==3.1.0
-plotly==5.11.0
-scikit-learn==1.2.0
-kaleido==0.2.1
-scikit-optimize==0.9.0
-pandas==1.5.2
+optuna==4.9.0
 optuna-dashboard
+pandas==2.3.3
+plotly==6.8.0
+scikit-learn==1.9.0
+cmaes==0.13.0
