@@ -24,7 +24,7 @@ from concurrent.futures import ProcessPoolExecutor
 import logging
 from statistics import mean
 from typing import List
-import multiprocessing
+import io
 from datetime import datetime
 import glob
 import math
@@ -157,11 +157,17 @@ class Duel:
 
         self.betza = []
 
-        self.lock = multiprocessing.Manager().Lock()
+    def __getstate__(self):
+        # Workers receive their single fen as an argument and no longer write
+        # the PGN themselves, so avoid pickling the full opening list to every
+        # worker process (it can be large) - keeps serialization/memory low.
+        state = self.__dict__.copy()
+        state['fens'] = []
+        return state
 
-    def save_game(self, fen, moves, scores, depths, e1_name, e2_name,
-                  start_turn, gres, termination, round_num, subround):
-        self.lock.acquire()
+    def format_game(self, fen, moves, scores, depths, e1_name, e2_name,
+                    start_turn, gres, termination, round_num, subround):
+        """Build and return the PGN text for a finished game."""
         logging.info('Saving game ...')
         tag_date = datetime.today().strftime('%Y.%m.%d')
         round_tag_value = f'{round_num}.{subround}'
@@ -173,65 +179,66 @@ class Duel:
             betzavalue += f'{p}:{v};'
         betzavalue = betzavalue[0:-1]  # strip the last semi-colon.
 
-        with open(self.pgnout, 'a') as f:
-            f.write(f'[Event "{self.event}"]\n')
-            f.write('[Site "Computer"]\n')
-            f.write(f'[Date "{tag_date}"]\n')
-            f.write(f'[Round "{round_tag_value}"]\n')
-            f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
-            f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
-            f.write(f'[Result "{gres}"]\n')
-            f.write(f'[TimeControl "{self.base_time_sec}+{self.inc_time_sec}"]\n')
+        f = io.StringIO()
+        f.write(f'[Event "{self.event}"]\n')
+        f.write('[Site "Computer"]\n')
+        f.write(f'[Date "{tag_date}"]\n')
+        f.write(f'[Round "{round_tag_value}"]\n')
+        f.write(f'[White "{e1_name if start_turn else e2_name}"]\n')
+        f.write(f'[Black "{e1_name if not start_turn else e2_name}"]\n')
+        f.write(f'[Result "{gres}"]\n')
+        f.write(f'[TimeControl "{self.base_time_sec}+{self.inc_time_sec}"]\n')
 
-            f.write(f'[Variant "{self.variant}"]\n')
-            if self.variant == 'musketeer':
-                f.write(f'[VariantFamily "seirawan"]\n')
+        f.write(f'[Variant "{self.variant}"]\n')
+        if self.variant == 'musketeer':
+            f.write(f'[VariantFamily "seirawan"]\n')
 
-            f.write(f'[VariantMen "{betzavalue}"]\n')
+        f.write(f'[VariantMen "{betzavalue}"]\n')
 
-            if termination != '':
-                f.write(f'[Termination "{termination}"]\n')
+        if termination != '':
+            f.write(f'[Termination "{termination}"]\n')
 
-            if not isinstance(fen, int):
-                f.write(f'[FEN "{fen}"]\n')
+        if not isinstance(fen, int):
+            f.write(f'[FEN "{fen}"]\n')
+        else:
+            f.write('\n')
+
+        move_len = len(moves)
+
+        f.write(f'[PlyCount "{move_len}"]\n\n')
+
+        for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
+            num = i + 1
+            if num % 2 == 0:
+                if start_turn:
+                    str_num = f'{num // 2}... '
+                else:
+                    str_num = f'{num // 2 + 1}. '
             else:
+                num += 1
+                if start_turn:
+                    str_num = f'{num // 2}. '
+                else:
+                    str_num = f'{num // 2}... '
+
+            if move_len - 1 == i:
+                f.write(f'{str_num}{m} {{{s}/{d}}} {gres}')
+            else:
+                f.write(f'{str_num}{m} {{{s}/{d}}} ')
+
+            if (i + 1) % 5 == 0:
                 f.write('\n')
+        f.write('\n\n')
 
-            move_len = len(moves)
+        return f.getvalue()
 
-            f.write(f'[PlyCount "{move_len}"]\n\n')
-
-            for i, (m, s, d) in enumerate(zip(moves, scores, depths)):
-                num = i + 1
-                if num % 2 == 0:
-                    if start_turn:
-                        str_num = f'{num // 2}... '
-                    else:
-                        str_num = f'{num // 2 + 1}. '
-                else:
-                    num += 1
-                    if start_turn:
-                        str_num = f'{num // 2}. '
-                    else:
-                        str_num = f'{num // 2}... '
-
-                if move_len - 1 == i:
-                    f.write(f'{str_num}{m} {{{s}/{d}}} {gres}')
-                else:
-                    f.write(f'{str_num}{m} {{{s}/{d}}} ')
-
-                if (i + 1) % 5 == 0:
-                    f.write('\n')
-            f.write('\n\n')
-
-        self.lock.release()
-
-    def match(self, fen, round_num) -> List[float]:
+    def match(self, fen, round_num) -> tuple:
         """
-        Run an engine match between e1 and e2. Save the game and print result
-        from e1 perspective.
+        Run an engine match between e1 and e2. Return the e1 scores and the
+        PGN text of each game played from e1 perspective.
         """
         all_e1score = []
+        pgn_games = []
         is_show_search_info = False
         subround = 0
 
@@ -239,16 +246,18 @@ class Duel:
         for gn in range(self.repeat):
             logging.info(f'Match game no. {gn + 1}')
             logging.info(f'Test engine plays as {"first" if gn % 2 == 0 else "second"} engine.')
-            e1_folder, e2_folder = Path(self.e1['cmd']).parent, Path(self.e2['cmd']).parent
+            e1_cmd = resolve_engine_cmd(self.e1['cmd'])
+            e2_cmd = resolve_engine_cmd(self.e2['cmd'])
+            e1_folder, e2_folder = Path(e1_cmd).parent, Path(e2_cmd).parent
             subround = gn + 1
 
-            pe1 = subprocess.Popen(self.e1['cmd'], stdin=subprocess.PIPE,
+            pe1 = subprocess.Popen(e1_cmd, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True, bufsize=1,
                                    cwd=e1_folder)
 
-            pe2 = subprocess.Popen(self.e2['cmd'], stdin=subprocess.PIPE,
+            pe2 = subprocess.Popen(e2_cmd, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    universal_newlines=True, bufsize=1,
@@ -436,13 +445,13 @@ class Duel:
 
                 # Draw
                 if (self.draw_option['movenumber'] is not None
-                        and self.draw_option['movenumber'] is not None
+                        and self.draw_option['movecount'] is not None
                         and self.draw_option['score'] is not None):
                     game_endr, gresr, e1scorer = adjudicate_draw(
                         score_history, self.draw_option)
                     if game_endr:
                         gres, e1score = gresr, e1scorer
-                        logging.info('Game ends by resign adjudication.')
+                        logging.info('Game ends by draw adjudication.')
                         break
 
                 # Time is over
@@ -457,18 +466,37 @@ class Duel:
                 current_color = not current_color
 
             if self.pgnout is not None:
-                self.save_game(fen, move_hist, score_history,
-                               depth_history, eng[0]["name"], eng[1]["name"],
-                               start_turn, gres, termination, round_num, subround)
+                pgn_games.append(self.format_game(
+                    fen, move_hist, score_history,
+                    depth_history, eng[0]["name"], eng[1]["name"],
+                    start_turn, gres, termination, round_num, subround))
 
             for i, e in enumerate(eng):
                 send_command(e['proc'], 'quit', e['name'])
 
+            # Reap engine processes so we don't leak file descriptors or leave
+            # zombie/defunct processes behind across many games.
+            for e in eng:
+                proc = e['proc']
+                try:
+                    proc.stdin.close()
+                except (OSError, ValueError):
+                    pass
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                try:
+                    proc.stdout.close()
+                except (OSError, ValueError):
+                    pass
+
             all_e1score.append(e1score)
 
-        return all_e1score
+        return all_e1score, pgn_games
 
-    def round_match(self, fen, round_num) -> List[float]:
+    def round_match(self, fen, round_num) -> tuple:
         """
         Play a match between e1 and e2 using fen as starting position. By default
         2 games will be played color is reversed.
@@ -491,7 +519,15 @@ class Duel:
 
             for future in concurrent.futures.as_completed(joblist):
                 try:
-                    test_engine_score = future.result()
+                    test_engine_score, pgn_games = future.result()
+
+                    # Write PGN from the main process so workers don't need a
+                    # shared lock or to each open the output file.
+                    if self.pgnout is not None and pgn_games:
+                        with open(self.pgnout, 'a') as f:
+                            for game_pgn in pgn_games:
+                                f.write(game_pgn)
+
                     for s in test_engine_score:
                         test_engine_score_list.append(s)
 
@@ -516,8 +552,32 @@ class Duel:
                 except concurrent.futures.process.BrokenProcessPool as ex:
                     print(f'exception: {ex}')
 
-        logging.info(f'final test score: {mean(test_engine_score_list)}')
+        if test_engine_score_list:
+            logging.info(f'final test score: {mean(test_engine_score_list)}')
         print('Finished match')
+
+
+def resolve_engine_cmd(cmd):
+    """
+    Return an absolute path to the engine when cmd points to an existing file,
+    so the engine is found regardless of the worker's working directory (on
+    POSIX, subprocess resolves a relative program path relative to cwd). Bare
+    command names found on PATH are returned unchanged.
+    """
+    resolved = Path(cmd).resolve()
+    return str(resolved) if resolved.is_file() else cmd
+
+
+def parse_option_value(text):
+    """Convert an engine option value to int or float, falling back to str."""
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
 
 
 def define_engine(engine_option_value):
@@ -533,10 +593,9 @@ def define_engine(engine_option_value):
                 if 'cmd=' in value:
                     e1.update({'cmd': value.split('=')[1]})
                 elif 'option.' in value:
-                    # Todo: support float value
-                    # option.QueenValueOpening=1000
+                    # option.QueenValueOpening=1000 (int or float)
                     optn = value.split('option.')[1].split('=')[0]
-                    optv = int(value.split('option.')[1].split('=')[1])
+                    optv = parse_option_value(value.split('option.')[1].split('=', 1)[1])
                     ed1.update({optn: optv})
                     e1.update({'opt': ed1})
                 elif 'tc=' in value:
@@ -550,7 +609,7 @@ def define_engine(engine_option_value):
                     e2.update({'cmd': value.split('=')[1]})
                 elif 'option.' in value:
                     optn = value.split('option.')[1].split('=')[0]
-                    optv = int(value.split('option.')[1].split('=')[1])
+                    optv = parse_option_value(value.split('option.')[1].split('=', 1)[1])
                     ed2.update({optn: optv})
                     e2.update({'opt': ed2})
                 elif 'tc=' in value:
@@ -587,7 +646,7 @@ def get_fen_list(fn, is_rand=True, posperfile=-1):
 
             if posperfile != -1:
                 if is_rand:
-                    selections = random.sample(file_fens, posperfile)
+                    selections = random.sample(file_fens, min(posperfile, len(file_fens)))
                 else:
                     selections = file_fens[0:posperfile]
             else:
@@ -607,7 +666,7 @@ def get_fen_list(fn, is_rand=True, posperfile=-1):
 
             if posperfile != -1:
                 if is_rand:
-                    selections = random.sample(file_fens, posperfile)
+                    selections = random.sample(file_fens, min(posperfile, len(file_fens)))
                 else:
                     selections = file_fens[0:posperfile]
             else:
@@ -786,21 +845,6 @@ def is_game_end(line, test_engine_color):
     return game_end, gres, e1score, termination
 
 
-def param_to_dict(param):
-    """
-    Convert string param to a dictionary.
-    """
-    ret_param = {}
-    for par in param.split(','):
-        par = par.strip()
-        sppar = par.split()  # Does not support param with space
-        spname = sppar[0].strip()
-        spvalue = int(sppar[1].strip())
-        ret_param.update({spname: spvalue})
-
-    return ret_param
-
-
 def time_forfeit(is_timeup, current_color, test_engine_color):
     game_end, gres, e1score = False, '*', 0.0
 
@@ -838,7 +882,12 @@ def time_forfeit(is_timeup, current_color, test_engine_color):
 
 def send_command(proc, command, name=''):
     """Send command to engine process."""
-    proc.stdin.write(f'{command}\n')
+    try:
+        proc.stdin.write(f'{command}\n')
+        proc.stdin.flush()
+    except (BrokenPipeError, OSError, ValueError) as err:
+        logging.warning(f'{name} ! failed to send "{command}": {err}')
+        return
     logging.debug(f'{name} > {command}')
 
 
