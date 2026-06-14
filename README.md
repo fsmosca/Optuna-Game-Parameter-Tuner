@@ -38,9 +38,10 @@ See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-1
   * pip install optuna==4.9.0
   
 #### Visualization
-Plots are saved as self-contained interactive HTML files in the `visuals` folder (no Chrome or kaleido needed). scikit-learn is required for the parameter-importance plot.
-* pip install plotly==6.8.0
-* pip install scikit-learn==1.9.0
+Plots are saved as static PNG images in the `visuals` folder via optuna's
+matplotlib backend, so they can be viewed without a browser (handy on headless
+Linux boxes) and stay small. scikit-learn is required for the parameter-importance
+plot.
 
 #### To use the cmaes sampler
 * pip install cmaes==0.13.0
