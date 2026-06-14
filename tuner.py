@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v6.0.0'
+__version__ = 'v7.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
