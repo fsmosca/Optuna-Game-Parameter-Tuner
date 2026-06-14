@@ -700,7 +700,6 @@ def save_plots(study, study_name, input_param, is_plot=False):
     import matplotlib
     matplotlib.use('Agg')  # render to a file, no display/browser needed
     import matplotlib.pyplot as plt
-    from optuna.exceptions import ExperimentalWarning
     from optuna.visualization.matplotlib import (
         plot_optimization_history, plot_slice, plot_contour,
         plot_parallel_coordinate, plot_param_importances)
@@ -723,29 +722,32 @@ def save_plots(study, study_name, input_param, is_plot=False):
         fig.savefig(filename, dpi=100, bbox_inches='tight', facecolor=bg)
         plt.close(fig)
 
-    with warnings.catch_warnings():
-        # The matplotlib backend is marked experimental but stable since v2.2.
-        warnings.simplefilter('ignore', ExperimentalWarning)
-
-        plot_optimization_history(study)
-        save_current(f'{pre_name}_hist.png')
-
-        plot_slice(study, params=params)
-        save_current(f'{pre_name}_slice.png', figsize=(max(9, 3.0 * n), 5))
-
-        plot_contour(study, params=params)
-        save_current(f'{pre_name}_contour.png', figsize=(max(8, 3.4 * n), max(7, 3.4 * n)))
-
-        plot_parallel_coordinate(study, params=params)
-        save_current(f'{pre_name}_parallel.png', figsize=(max(9, 2.6 * n), 6))
-
+    def try_plot(make_plot, filename, figsize=None):
+        # Plotting is best-effort: a degenerate study (too few trials, or zero
+        # variance in objective values -> optuna's fANOVA raises RuntimeError)
+        # must never crash an optimization run that already finished.
         try:
-            plot_param_importances(study)
-        except ValueError as err:
-            # e.g. cannot evaluate importances with only a single trial
-            logger.exception(err)
-        else:
-            save_current(f'{pre_name}_importance.png')
+            make_plot()
+            save_current(filename, figsize)
+        except Exception as err:
+            logger.warning(f'Skipped plot "{filename}": {err}')
+            plt.close('all')
+
+    with warnings.catch_warnings():
+        # Plotting is best-effort; silence its warnings (e.g. optuna's
+        # ExperimentalWarning, matplotlib singular-limits on flat data).
+        warnings.simplefilter('ignore')
+
+        try_plot(lambda: plot_optimization_history(study),
+                 f'{pre_name}_hist.png')
+        try_plot(lambda: plot_slice(study, params=params),
+                 f'{pre_name}_slice.png', figsize=(max(9, 3.0 * n), 5))
+        try_plot(lambda: plot_contour(study, params=params),
+                 f'{pre_name}_contour.png', figsize=(max(8, 3.4 * n), max(7, 3.4 * n)))
+        try_plot(lambda: plot_parallel_coordinate(study, params=params),
+                 f'{pre_name}_parallel.png', figsize=(max(9, 2.6 * n), 6))
+        try_plot(lambda: plot_param_importances(study),
+                 f'{pre_name}_importance.png')
 
     logger.info('Done saving plots.\n')
 
