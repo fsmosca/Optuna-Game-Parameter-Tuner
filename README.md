@@ -173,8 +173,6 @@ Visit `http://127.0.0.1:8080/` on your browser.
 https://github.com/optuna/optuna
 * Cutechess  
 https://github.com/cutechess/cutechess
-* Plotly  
-https://plotly.com/
 * Sklearn  
 https://scikit-learn.org/stable/
 * [Stockfish](https://stockfishchess.org/)
