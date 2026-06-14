@@ -1,6 +1,6 @@
 optuna==4.9.0
-optuna-dashboard
+optuna-dashboard==0.20.0
 pandas==2.3.3
-plotly==6.8.0
+matplotlib==3.11.0
 scikit-learn==1.9.0
 cmaes==0.13.0
