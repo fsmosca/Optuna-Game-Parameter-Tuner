@@ -695,40 +695,57 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     logger.info('Saving plots ...')
 
-    trials = len(study.trials)
+    # Use optuna's matplotlib backend so plots are saved as static PNG images.
+    import warnings
+    import matplotlib
+    matplotlib.use('Agg')  # render to a file, no display/browser needed
+    import matplotlib.pyplot as plt
+    from optuna.exceptions import ExperimentalWarning
+    from optuna.visualization.matplotlib import (
+        plot_optimization_history, plot_slice, plot_contour,
+        plot_parallel_coordinate, plot_param_importances)
 
+    trials = len(study.trials)
     bg = '#F7D0CA'
+    params = list(input_param.keys())
 
     # Make sure there is a visuals folder in the current working folder.
     pre_name = f'./visuals/{study_name}_{trials}'
 
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.update_layout(paper_bgcolor=bg)
-    fig.write_html(f'{pre_name}_hist.html')
+    n = len(params)
 
-    fig = optuna.visualization.plot_slice(study, params=list(input_param.keys()))
-    fig.update_layout(paper_bgcolor=bg)
-    fig.write_html(f'{pre_name}_slice.html')
+    def save_current(filename, figsize=None):
+        fig = plt.gcf()
+        # Long parameter names overlap on the default canvas, so grow the
+        # figure with the number of parameters.
+        if figsize is not None:
+            fig.set_size_inches(*figsize)
+        fig.savefig(filename, dpi=100, bbox_inches='tight', facecolor=bg)
+        plt.close(fig)
 
-    fig = optuna.visualization.plot_contour(study, params=list(input_param.keys()))
-    if len(input_param) >= 3:
-        fig.update_layout(width=1000 + len(input_param)*200, height=1000 + len(input_param)*200)
-    fig.update_layout(paper_bgcolor=bg)
-    fig.write_html(f'{pre_name}_contour.html')
+    with warnings.catch_warnings():
+        # The matplotlib backend is marked experimental but stable since v2.2.
+        warnings.simplefilter('ignore', ExperimentalWarning)
 
-    fig = optuna.visualization.plot_parallel_coordinate(study, params=list(input_param.keys()))
-    fig.update_layout(paper_bgcolor=bg)
-    fig.write_html(f'{pre_name}_parallel.html')
+        plot_optimization_history(study)
+        save_current(f'{pre_name}_hist.png')
 
-    try:
-        fig = optuna.visualization.plot_param_importances(study)
-    except ValueError as err:
-        # Optuna v2.9.1, ValueError: Cannot evaluate parameter importances with only a single trial
-        logger.exception(err)
-    else:
-        fig.update_layout(paper_bgcolor=bg)
-        fig.data[0]["texttemplate"] = "%{text:.5f}"
-        fig.write_html(f'{pre_name}_importance.html')
+        plot_slice(study, params=params)
+        save_current(f'{pre_name}_slice.png', figsize=(max(9, 3.0 * n), 5))
+
+        plot_contour(study, params=params)
+        save_current(f'{pre_name}_contour.png', figsize=(max(8, 3.4 * n), max(7, 3.4 * n)))
+
+        plot_parallel_coordinate(study, params=params)
+        save_current(f'{pre_name}_parallel.png', figsize=(max(9, 2.6 * n), 6))
+
+        try:
+            plot_param_importances(study)
+        except ValueError as err:
+            # e.g. cannot evaluate importances with only a single trial
+            logger.exception(err)
+        else:
+            save_current(f'{pre_name}_importance.png')
 
     logger.info('Done saving plots.\n')
 
