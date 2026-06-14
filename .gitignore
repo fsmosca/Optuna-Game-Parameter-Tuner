@@ -138,7 +138,7 @@ dmypy.json
 *.db
 
 # Repo
-*.png
+visuals/
 *.csv
 *.exe
 *.bat
