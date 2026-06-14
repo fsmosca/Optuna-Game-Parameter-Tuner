@@ -346,7 +346,7 @@ class Objective(object):
 
         if args_sampler is None:
             logger.warning('Sampler option is not defined, use tpe sampler.')
-            return optuna.samplers.TPESampler()
+            return optuna.samplers.TPESampler(), n_startup_trials
 
         name = None
         for opt in args_sampler:
@@ -357,7 +357,7 @@ class Objective(object):
 
         if name is None:
             logger.warning('Sampler name is not defined, use tpe sampler.')
-            return optuna.samplers.TPESampler()
+            return optuna.samplers.TPESampler(), n_startup_trials
 
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
         if name == 'tpe':
@@ -1038,8 +1038,8 @@ def main():
             is_study = True
         except ValueError:
             logger.warning('Warning, best value from previous trial is not found!')
-        except:
-            logger.exception('Unexpected error:', sys.exc_info()[0])
+        except Exception:
+            logger.exception('Unexpected error while reading study best value.')
             raise
         logger.info(f'study best objective value: {best_value}')
 
@@ -1048,8 +1048,8 @@ def main():
             best_param = copy.deepcopy(study.best_params)
         except ValueError:
             logger.warning('Warning, best param from previous trial is not found!.')
-        except:
-            logger.exception('Unexpected error:', sys.exc_info()[0])
+        except Exception:
+            logger.exception('Unexpected error while reading study best params.')
             raise
         logger.info(f'study best param: {best_param}')
 
