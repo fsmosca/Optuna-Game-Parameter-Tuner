@@ -144,3 +144,6 @@ visuals/
 *.bat
 *.fen
 *.txt
+
+# fastchess resume/state file written to the run directory
+config.json
