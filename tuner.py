@@ -814,6 +814,46 @@ def elapse_time(seconds):
     logger.info(f'elapse: {h:.0f}h:{m:.0f}m:{s:.0f}s')
 
 
+def load_params_from_file(path):
+    """
+    Load a parameter dict from a JSON (.json) or YAML (.yaml/.yml) file,
+    chosen by the file extension.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise Exception(f'Param file not found: {path}')
+
+    # utf-8-sig transparently strips a leading BOM (common on Windows editors)
+    # and still reads plain UTF-8 correctly.
+    text = p.read_text(encoding='utf-8-sig')
+    suffix = p.suffix.lower()
+
+    if suffix == '.json':
+        import json
+        return json.loads(text)
+    if suffix in ('.yaml', '.yml'):
+        import yaml  # PyYAML, already a dependency of optuna
+        return yaml.safe_load(text)
+
+    raise Exception(
+        f'Unsupported param file type "{suffix}" for {path}; use .json, .yaml or .yml.')
+
+
+def resolve_param(inline_value, file_path, required, name):
+    """
+    Resolve a parameter dict from either a file (--<name>-file) or an inline
+    string (--<name>). The file takes precedence. Inline strings are parsed as
+    Python literals (single-quoted dicts) for backward compatibility.
+    """
+    if file_path is not None:
+        return load_params_from_file(file_path)
+    if inline_value is not None:
+        return ast.literal_eval(inline_value)
+    if required:
+        raise Exception(f'Define {name} via --{name} or --{name}-file.')
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
@@ -934,8 +974,9 @@ def main():
                              'That would mean after 50 partial games, when result is below -10 Elo\n'
                              'then the trial is pruned, the other 50 games will not be played.',
                         default=None)
-    parser.add_argument('--input-param', required=True, type=str,
-                        help='The parameters that will be optimized.\n'
+    parser.add_argument('--input-param', required=False, type=str,
+                        help='The parameters that will be optimized. Define this OR\n'
+                             '--input-param-file (one is required).\n'
                              'Example 1 with 1 parameter:\n'
                              '--input-param \"{\'pawn\': {\'default\': 92,'
                              ' \'min\': 90, \'max\': 120, \'step\': 2}}\"\n'
@@ -948,12 +989,20 @@ def main():
                              '--input-param \"{\'CPuct\': {\'default\': 0.5,'
                              ' \'min\': 0.1, \'max\': 3.0, \'step\': 0.05, \'type\': \'float\'}}\"'
                         )
+    parser.add_argument('--input-param-file', required=False, type=str,
+                        help='Path to a JSON (.json) or YAML (.yaml/.yml) file with the\n'
+                             'parameters to optimize, as an alternative to --input-param.\n'
+                             'Same structure, e.g. a JSON file containing:\n'
+                             '{"pawn": {"default": 92, "min": 90, "max": 120, "step": 2}}')
     parser.add_argument('-v', '--version', action='version', version=f'{__version__}')
     parser.add_argument('--common-param', required=False, type=str,
                         help='The parameters that will be sent to both test and base engines.\n'
                              'Make sure that this param is not included in the input-param.\n'
                              'Example:\n'
                              '--common-param \"{\'RookOpenFile\': 92, \'KnightOutpost\': 300}\"')
+    parser.add_argument('--common-param-file', required=False, type=str,
+                        help='Path to a JSON or YAML file with the common parameters,\n'
+                             'as an alternative to --common-param.')
 
     args = parser.parse_args()
 
@@ -973,10 +1022,10 @@ def main():
 
     save_plots_every_trial = args.save_plots_every_trial
     fix_base_param = True
-    common_param = args.common_param
 
-    if common_param is not None:
-        common_param = ast.literal_eval(common_param)
+    # Common param can come from --common-param (inline) or --common-param-file.
+    common_param = resolve_param(args.common_param, args.common_param_file,
+                                 required=False, name='common-param')
 
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
@@ -993,8 +1042,9 @@ def main():
     logger.info(f'sampler: {args.sampler}')
     logger.info(f'objective value type: {"Elo" if elo_objective else "score rate"}\n')
 
-    # Convert the input param string to a dict of dict and sort by key.
-    input_param = ast.literal_eval(args.input_param)
+    # Input param can come from --input-param (inline) or --input-param-file.
+    input_param = resolve_param(args.input_param, args.input_param_file,
+                                required=True, name='input-param')
     input_param = OrderedDict(sorted(input_param.items()))
 
     logger.info(f'input param: {input_param}\n')
