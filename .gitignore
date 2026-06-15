@@ -141,7 +141,6 @@ dmypy.json
 visuals/
 *.csv
 *.exe
-*.bat
 *.fen
 *.txt
 
