@@ -1,0 +1,9 @@
+RazorMargin1: {default: 220, min: 150, max: 400, step: 1}
+RazorMargin2: {default: 235, min: 150,  max: 400, step: 1}
+RazorMargin3: {default: 250, min: 150,  max: 400, step: 1}
+FutilityMargin: {default: 60, min: 25, max: 300, step: 1}
+ProbCutMargin:  {default: 200, min: 50,  max: 400, step: 1}
+FutilityPruneDepth: {default: 7, min: 3,  max: 12, step: 1}
+QSearchFutilityMargin: {default: 100, min: 40,  max: 250, step: 1}
+QuietPruneBase: {default: 150, min: 50,  max: 400, step: 1}
+QuietPrunePerDepth: {default: 100, min: 50,  max: 300, step: 1}
