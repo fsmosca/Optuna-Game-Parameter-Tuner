@@ -193,6 +193,10 @@ class Objective(object):
         if self.match_manager == 'cutechess' and self.proto == 'cecp':
             self.proto = 'xboard'
 
+        # fastchess only speaks UCI.
+        if self.match_manager == 'fastchess':
+            self.proto = 'uci'
+
         self.common_param = common_param
         self.resign_movecount = resign_movecount
         self.resign_score = resign_score
@@ -251,6 +255,12 @@ class Objective(object):
         return new_param
 
     def get_match_commands(self, test_options, base_options, games):
+        # cutechess-cli and fastchess share most of the command syntax; duel.py
+        # is the remaining branch. fastchess is handled as a cutechess-style CLI
+        # with a few flag differences (see notes below).
+        cutechess_style = self.match_manager in ('cutechess', 'fastchess')
+
+        # Resolve the match-manager executable.
         if self.match_manager == 'cutechess':
             if self.match_manager_file:
                 # User-supplied path wins (e.g. a self-compiled cutechess-cli
@@ -262,6 +272,15 @@ class Objective(object):
                 # The repo ships a Windows cutechess-cli.exe; use it when present.
                 # On Linux fall back to a cutechess-cli found on PATH.
                 tour_manager = bundled if bundled.is_file() else exe_name
+        elif self.match_manager == 'fastchess':
+            if self.match_manager_file:
+                tour_manager = f'"{self.match_manager_file}"'
+            else:
+                exe_name = 'fastchess.exe' if sys.platform == 'win32' else 'fastchess'
+                bundled = Path(Path.cwd(), 'tourney_manager', 'fastchess', exe_name)
+                # No fastchess binary ships with the repo; use one if the user
+                # dropped it here, otherwise fall back to fastchess on PATH.
+                tour_manager = bundled if bundled.is_file() else exe_name
         else:
             # duel.py is a bundled Python script run via the interpreter; the
             # override lets users point at a duel.py in a custom location.
@@ -270,10 +289,18 @@ class Objective(object):
 
         command = f' -concurrency {self.concurrency}'
 
-        if self.match_manager == 'cutechess':
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options} proto={self.proto}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options} proto={self.proto}'
-            command += ' -wait 100'
+        if cutechess_style:
+            # fastchess treats a bare relative cmd (e.g. engines/sf.exe) as a
+            # PATH lookup and fails, so give it an absolute, quoted engine path.
+            if self.match_manager == 'fastchess':
+                e1 = f'"{Path(self.e1).resolve()}"'
+                e2 = f'"{Path(self.e2).resolve()}"'
+            else:
+                e1, e2 = self.e1, self.e2
+            command += f' -engine cmd={e1} name={self.test_name} {test_options} proto={self.proto}'
+            command += f' -engine cmd={e2} name={self.base_name} {base_options} proto={self.proto}'
+            if self.match_manager == 'cutechess':
+                command += ' -wait 100'
         else:
             command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
             command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
@@ -281,16 +308,22 @@ class Objective(object):
         if self.variant != 'normal':
             command += f' -variant {self.variant}'
 
-        command += ' -tournament round-robin'
+        # fastchess spells round-robin without the hyphen.
+        if self.match_manager == 'fastchess':
+            command += ' -tournament roundrobin'
+        else:
+            command += ' -tournament round-robin'
 
-        if self.match_manager == 'cutechess':
+        if cutechess_style:
             command += ' -recover'
             command += f' -rounds {games//2} -games 2 -repeat 2'
 
+            # fastchess takes a fixed depth/nodes directly; cutechess needs tc=inf.
+            tc_prefix = '' if self.match_manager == 'fastchess' else 'tc=inf '
             if self.depth is not None:
-                command += f' -each tc=inf depth={self.depth}'
+                command += f' -each {tc_prefix}depth={self.depth}'
             elif self.nodes is not None:
-                command += f' -each tc=inf nodes={self.nodes}'
+                command += f' -each {tc_prefix}nodes={self.nodes}'
             else:
                 command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
         # duel.py match manager
@@ -301,7 +334,7 @@ class Objective(object):
             else:
                 command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
-        if self.match_manager == 'cutechess':
+        if cutechess_style:
             command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
         else:
             command += f' -openings file={self.opening_file} posperfile={self.opening_posperfile}'
@@ -312,10 +345,16 @@ class Objective(object):
 
         if self.resign_movecount is not None and self.resign_score is not None:
             command += f' -resign movecount={self.resign_movecount} score={self.resign_score}'
-            if self.match_manager == 'cutechess':
+            if cutechess_style:
                 command += f' twosided=true'
 
-        command += f' -pgnout {self.pgnout}'
+        # fastchess uses the file= form and must emit cutechess-compatible output
+        # so read_result can parse the score lines.
+        if self.match_manager == 'fastchess':
+            command += f' -pgnout file={self.pgnout}'
+            command += ' -output format=cutechess'
+        else:
+            command += f' -pgnout {self.pgnout}'
 
         return tour_manager, command
 
@@ -953,16 +992,19 @@ def main():
                         help='Save plots every n trials, default=10.',
                         default=10)
     parser.add_argument('--match-manager', required=False, type=str,
-                        help='The application that handles the engine match,'
-                             ' default=cutechess.',
-                        default='cutechess')
+                        help='The application that handles the engine match,\n'
+                             'can be cutechess, fastchess or duel, default=cutechess.\n'
+                             'Note: fastchess is UCI-only (no xboard/cecp engines).',
+                        default=None)
     parser.add_argument('--match-manager-file', required=False, type=str,
                         default=None,
-                        help='Path to the match-manager file. For cutechess this is\n'
-                             'the cutechess-cli executable (e.g. a self-compiled one\n'
-                             'on Linux); it overrides the bundled binary and PATH\n'
-                             'lookup. For duel it is the duel.py script. Examples:\n'
-                             '--match-manager-file /home/user/cutechess/cutechess-cli\n'
+                        help='Path to the match-manager file. For cutechess/fastchess\n'
+                             'this is the executable (e.g. a self-compiled one on\n'
+                             'Linux); it overrides the bundled binary and PATH lookup.\n'
+                             'For duel it is the duel.py script. Pair it with the\n'
+                             'matching --match-manager flavor. Examples:\n'
+                             '--match-manager cutechess --match-manager-file /home/user/cutechess/cutechess-cli\n'
+                             '--match-manager fastchess --match-manager-file /home/user/fastchess/fastchess\n'
                              '--match-manager duel --match-manager-file /home/user/duel.py')
     parser.add_argument('--protocol', required=False, type=str,
                         help='The protocol that the engine supports, can be'
@@ -1030,6 +1072,28 @@ def main():
     eng_path = Path(args.engine)
     if not eng_path.is_file():
         raise Exception(f'The engine in {eng_path} is missing!')
+
+    # Resolve and validate the match manager.
+    # --match-manager defaults to None so we can tell "explicitly set" from "omitted".
+    valid_managers = ('cutechess', 'fastchess', 'duel')
+    if args.match_manager is None:
+        if args.match_manager_file is not None:
+            # A path was given but the flavor was not; the command syntax differs
+            # between managers, so we cannot safely guess it.
+            raise Exception(
+                '--match-manager-file was given without --match-manager. Please also '
+                'specify the flavor, e.g. --match-manager fastchess (or cutechess).')
+        args.match_manager = 'cutechess'
+    if args.match_manager not in valid_managers:
+        raise Exception(
+            f'Unknown --match-manager "{args.match_manager}", '
+            f'expected one of {", ".join(valid_managers)}.')
+
+    # fastchess is UCI-only; it cannot run xboard/cecp engines.
+    if args.match_manager == 'fastchess' and args.protocol == 'cecp':
+        raise Exception(
+            'fastchess only supports UCI engines; --protocol cecp is not compatible '
+            'with --match-manager fastchess.')
 
     # Check the user-supplied match-manager executable, if any, exists.
     if args.match_manager_file is not None and not Path(args.match_manager_file).is_file():
