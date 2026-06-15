@@ -97,6 +97,21 @@ The same flag works for the duel.py manager (xboard engines), where it points at
 --match-manager duel --match-manager-file /home/user/duel.py
 ```
 
+#### Use fastchess as match manager
+[fastchess](https://github.com/Disservin/fastchess) is a fast, cutechess-cli-compatible
+alternative. Select it with `--match-manager fastchess`. No fastchess binary ships with
+this repo, so supply your own via `--match-manager-file`, or place a
+`fastchess`/`fastchess.exe` on the `PATH`, or drop it into `tourney_manager/fastchess/`:
+
+```python
+--match-manager fastchess --match-manager-file /home/user/fastchess/fastchess
+--match-manager fastchess --match-manager-file C:/tools/fastchess/fastchess.exe
+```
+
+Note: fastchess only supports **UCI** engines (no xboard/cecp). Resolution order is
+`--match-manager-file` → `tourney_manager/fastchess/fastchess[.exe]` → `fastchess` on
+the `PATH`.
+
 #### Use Elo as objective value instead of score rate
 Use the flag  
 `--elo-objective`
@@ -218,6 +233,8 @@ Visit `http://127.0.0.1:8080/` on your browser.
 https://github.com/optuna/optuna
 * Cutechess  
 https://github.com/cutechess/cutechess
+* Fastchess  
+https://github.com/Disservin/fastchess
 * Sklearn  
 https://scikit-learn.org/stable/
 * [Stockfish](https://stockfishchess.org/)
