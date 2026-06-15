@@ -113,6 +113,30 @@ Add a key value pair of `'type': 'float'`
 --input-param "{'CPuct': {'default':2.147, 'min':1.0, 'max':3.0, 'step':0.05, 'type': 'float'}, 'CPuctBase': {'default':18368.0, 'min':15000.0, 'max':20000.0, 'step':2.0, 'type': 'float'}, 'CPuctFactor': {'default':2.82, 'min':0.5, 'max':3.5, 'step':0.05, 'type': 'float'}, 'FpuValue': {'default':0.443, 'min':-0.1, 'max':1.2, 'step':0.05, 'type': 'float'}, 'PolicyTemperature': {'default':1.61, 'min':0.5, 'max':3.0, 'step':0.05, 'type': 'float'}}"
 ```
 
+#### Parameters from a JSON or YAML file
+For larger parameter sets, put them in a file and use `--input-param-file`
+instead of the inline `--input-param` (define one or the other). The file may be
+JSON (`.json`) or YAML (`.yaml`/`.yml`), with the same structure. YAML also lets
+you add comments.
+```python
+python tuner.py --input-param-file params.yaml ...
+```
+`params.yaml`:
+```yaml
+# Search-margin tuning
+RazorMargin1:          {default: 220, min: 150, max: 400, step: 1}
+QSearchFutilityMargin: {default: 100, min: 50,  max: 200, step: 1}
+CPuct:                 {default: 2.147, min: 1.0, max: 3.0, step: 0.05, type: float}
+```
+`params.json`:
+```json
+{
+  "RazorMargin1":          {"default": 220, "min": 150, "max": 400, "step": 1},
+  "QSearchFutilityMargin": {"default": 100, "min": 50,  "max": 200, "step": 1}
+}
+```
+There is an equivalent `--common-param-file` for the common parameters.
+
 
 ## G. Optimization studies
 
