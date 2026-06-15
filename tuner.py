@@ -142,7 +142,8 @@ class Objective(object):
                  nodes: Union[None, int]=None, base_time_sec=5,
                  inc_time_sec=0.05, rounds=16,
                  concurrency=1, proto='uci', fix_base_param=True,
-                 match_manager='cutechess', good_result_cnt=0,
+                 match_manager='cutechess', match_manager_file=None,
+                 good_result_cnt=0,
                  depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
@@ -182,6 +183,7 @@ class Objective(object):
         self.fix_base_param = fix_base_param
         self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
+        self.match_manager_file = match_manager_file
         self.depth = depth
         self.games_per_trial = games_per_trial
 
@@ -250,13 +252,21 @@ class Objective(object):
 
     def get_match_commands(self, test_options, base_options, games):
         if self.match_manager == 'cutechess':
-            exe_name = 'cutechess-cli.exe' if sys.platform == 'win32' else 'cutechess-cli'
-            bundled = Path(Path.cwd(), 'tourney_manager', 'cutechess', exe_name)
-            # The repo ships a Windows cutechess-cli.exe; use it when present.
-            # On Linux fall back to a cutechess-cli found on PATH.
-            tour_manager = bundled if bundled.is_file() else exe_name
+            if self.match_manager_file:
+                # User-supplied path wins (e.g. a self-compiled cutechess-cli
+                # on Linux). Quoted in case the path contains spaces.
+                tour_manager = f'"{self.match_manager_file}"'
+            else:
+                exe_name = 'cutechess-cli.exe' if sys.platform == 'win32' else 'cutechess-cli'
+                bundled = Path(Path.cwd(), 'tourney_manager', 'cutechess', exe_name)
+                # The repo ships a Windows cutechess-cli.exe; use it when present.
+                # On Linux fall back to a cutechess-cli found on PATH.
+                tour_manager = bundled if bundled.is_file() else exe_name
         else:
-            tour_manager = f'"{sys.executable}" -u ./tourney_manager/duel/duel.py'
+            # duel.py is a bundled Python script run via the interpreter; the
+            # override lets users point at a duel.py in a custom location.
+            duel_script = self.match_manager_file or './tourney_manager/duel/duel.py'
+            tour_manager = f'"{sys.executable}" -u "{duel_script}"'
 
         command = f' -concurrency {self.concurrency}'
 
@@ -946,6 +956,14 @@ def main():
                         help='The application that handles the engine match,'
                              ' default=cutechess.',
                         default='cutechess')
+    parser.add_argument('--match-manager-file', required=False, type=str,
+                        default=None,
+                        help='Path to the match-manager file. For cutechess this is\n'
+                             'the cutechess-cli executable (e.g. a self-compiled one\n'
+                             'on Linux); it overrides the bundled binary and PATH\n'
+                             'lookup. For duel it is the duel.py script. Examples:\n'
+                             '--match-manager-file /home/user/cutechess/cutechess-cli\n'
+                             '--match-manager duel --match-manager-file /home/user/duel.py')
     parser.add_argument('--protocol', required=False, type=str,
                         help='The protocol that the engine supports, can be'
                              ' uci or cecp, default=uci.',
@@ -1012,6 +1030,11 @@ def main():
     eng_path = Path(args.engine)
     if not eng_path.is_file():
         raise Exception(f'The engine in {eng_path} is missing!')
+
+    # Check the user-supplied match-manager executable, if any, exists.
+    if args.match_manager_file is not None and not Path(args.match_manager_file).is_file():
+        raise Exception(
+            f'The match-manager file in {args.match_manager_file} is missing!')
 
     trials = args.trials
 
@@ -1148,7 +1171,8 @@ def main():
                                  args.base_time_sec, args.inc_time_sec,
                                  rounds, args.concurrency,
                                  args.protocol, fix_base_param,
-                                 args.match_manager, good_result_cnt,
+                                 args.match_manager, args.match_manager_file,
+                                 good_result_cnt,
                                  args.depth, games_per_trial, th_pruner,
                                  common_param, args.resign_movecount,
                                  args.resign_score, args.draw_movenumber,
