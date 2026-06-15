@@ -112,6 +112,16 @@ Note: fastchess only supports **UCI** engines (no xboard/cecp). Resolution order
 `--match-manager-file` → `tourney_manager/fastchess/fastchess[.exe]` → `fastchess` on
 the `PATH`.
 
+fastchess can bind engine threads to CPU cores via `--use-affinity`, which reduces
+result variance. Use it bare to auto-bind, or pass a core list/range:
+
+```python
+--match-manager fastchess --use-affinity
+--match-manager fastchess --use-affinity 3,5,7-11,13
+```
+
+`--use-affinity` is only valid with `--match-manager fastchess`.
+
 #### Use Elo as objective value instead of score rate
 Use the flag  
 `--elo-objective`
