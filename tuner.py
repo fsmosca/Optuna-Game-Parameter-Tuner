@@ -149,7 +149,8 @@ class Objective(object):
                  resign_movecount=None, resign_score=None,
                  draw_movenumber=None, draw_movecount=6, draw_score=0,
                  opening_posperfile=-1, n_startup_trials=1,
-                 noisy_result=False, elo_objective=False):
+                 noisy_result=False, elo_objective=False,
+                 use_affinity=None):
         self.study =study
         self.input_param = copy.deepcopy(input_param)
         self.best_param = copy.deepcopy(best_param)
@@ -196,6 +197,9 @@ class Objective(object):
         # fastchess only speaks UCI.
         if self.match_manager == 'fastchess':
             self.proto = 'uci'
+
+        # fastchess thread affinity: None=off, True=bare flag, str=core list/range.
+        self.use_affinity = use_affinity
 
         self.common_param = common_param
         self.resign_movecount = resign_movecount
@@ -353,6 +357,12 @@ class Objective(object):
         if self.match_manager == 'fastchess':
             command += f' -pgnout file={self.pgnout}'
             command += ' -output format=cutechess'
+            # Thread affinity: bare flag auto-binds, otherwise a core list/range.
+            if self.use_affinity is not None:
+                if self.use_affinity is True:
+                    command += ' -use-affinity'
+                else:
+                    command += f' -use-affinity {self.use_affinity}'
         else:
             command += f' -pgnout {self.pgnout}'
 
@@ -943,6 +953,11 @@ def main():
     parser.add_argument('--concurrency', required=False, type=int,
                         help='Number of game matches to run concurrently, default=1.',
                         default=1)
+    parser.add_argument('--use-affinity', required=False, type=str,
+                        nargs='?', const=True, default=None,
+                        help='fastchess only: bind engine threads to CPU cores.\n'
+                             'Bare --use-affinity auto-binds; or pass a core list/range,\n'
+                             'e.g. --use-affinity 3,5,7-11,13. Reduces result variance.')
     parser.add_argument('--games-per-trial', required=False, type=int,
                         help='Number of games per trial, default=32.\n'
                         'This should be even number.', default=32)
@@ -1095,6 +1110,11 @@ def main():
             'fastchess only supports UCI engines; --protocol cecp is not compatible '
             'with --match-manager fastchess.')
 
+    # --use-affinity is a fastchess-only feature.
+    if args.use_affinity is not None and args.match_manager != 'fastchess':
+        raise Exception(
+            '--use-affinity is only supported with --match-manager fastchess.')
+
     # Check the user-supplied match-manager executable, if any, exists.
     if args.match_manager_file is not None and not Path(args.match_manager_file).is_file():
         raise Exception(
@@ -1242,7 +1262,8 @@ def main():
                                  args.resign_score, args.draw_movenumber,
                                  args.draw_movecount, args.draw_score,
                                  args.opening_posperfile, n_startup_trials,
-                                 args.noisy_result, elo_objective),
+                                 args.noisy_result, elo_objective,
+                                 use_affinity=args.use_affinity),
                        n_trials=n_trials)
 
         # Create and save plots after this study session is completed.
