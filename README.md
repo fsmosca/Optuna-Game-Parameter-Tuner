@@ -76,6 +76,27 @@ Or type `python tuner.py -h`
 python tuner.py --sampler name=tpe --engine ./engines/deuterium/deuterium --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}}" --games-per-trial 24 --plot --base-time-sec 15 --inc-time-sec 0.1 --study-name study1 --pgn-output study1.pgn --trials 100 --common-param "{'Hash': 128}"
 ```
 
+#### Specify the match-manager location
+By default the cutechess manager uses the bundled
+`tourney_manager/cutechess/cutechess-cli.exe` (Windows) and otherwise looks for
+`cutechess-cli` on the `PATH`. On Linux, `cutechess-cli` usually has to be compiled
+from source, so you can point the tuner straight at your binary with
+`--match-manager-file` (this also works for a custom `.exe` on Windows):
+
+```python
+--match-manager-file /home/user/cutechess/cutechess-cli
+```
+
+Resolution order for cutechess is: `--match-manager-file` → bundled binary →
+`cutechess-cli` on `PATH`.
+
+The same flag works for the duel.py manager (xboard engines), where it points at a
+`duel.py` in a custom location:
+
+```python
+--match-manager duel --match-manager-file /home/user/duel.py
+```
+
 #### Use Elo as objective value instead of score rate
 Use the flag  
 `--elo-objective`
