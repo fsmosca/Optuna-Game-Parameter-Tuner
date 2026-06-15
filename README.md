@@ -1,250 +1,408 @@
 # Optuna Game Parameter Tuner
-[![Python 3.9](https://img.shields.io/badge/Python-%203.9%20%7C%203.10%20%7C%203.11%20-cyan.svg)](https://www.python.org/downloads/release/python-390/)
 
-A game search and evaluation parameter tuner using optuna framework. The game can be a chess or other game variants. Engine evaluation parameters that can be optimized are piece values like pawn value or knight value and others. Search parameters that can be optimized are futility pruning margin, null move reduction factors and others. 
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-v7.0.0-orange.svg)](#)
+[![Optuna](https://img.shields.io/badge/powered%20by-Optuna-9cf.svg)](https://github.com/optuna/optuna)
 
-## A. Optimization plots
+Automatically tune the **evaluation and search parameters** of a game-playing engine
+using the [Optuna](https://github.com/optuna/optuna) optimization framework.
 
-**1. Optimization History**
+The tuner repeatedly plays **engine-vs-engine matches** — a *test* engine using the
+parameters suggested by the optimizer against a *base* engine using the current best
+parameters — and feeds the match result (score rate or Elo) back to Optuna as the
+objective. Over many trials it converges on stronger parameter values. It is primarily
+aimed at chess engines (piece values, pruning margins, reduction factors, MCTS
+constants, …) but works with any UCI/xboard engine and game variant whose tunable
+options can be set on the command line.
 
-![history](images/hist.png)
+![optimization history](images/hist.png)
 
-**2. Contour**
+---
 
-![history](images/contour.png)
+## Table of contents
 
-## B. Setup
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Match managers](#match-managers)
+- [Defining parameters](#defining-parameters)
+- [Objective: score rate vs Elo](#objective-score-rate-vs-elo)
+- [Pruning unpromising trials](#pruning-unpromising-trials)
+- [Samplers / optimizers](#samplers--optimizers)
+- [Command-line reference](#command-line-reference)
+- [Examples](#examples)
+- [Plots & visualization](#plots--visualization)
+- [Optuna dashboard](#optuna-dashboard)
+- [Tools](#tools)
+- [Project structure](#project-structure)
+- [Optimization studies](#optimization-studies)
+- [Credits](#credits)
+- [License](#license)
 
-### Copy the whole repository
+---
 
-From command line:  
+## Features
 
-* git clone https://github.com/fsmosca/Optuna-Game-Parameter-Tuner.git
+- **Optuna-powered optimization** with [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html)
+  and [CMA-ES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html) samplers.
+- **Two objective types**: win/draw score rate (default) or **Elo** (`--elo-objective`).
+- **Three match managers**: [cutechess-cli](https://github.com/cutechess/cutechess),
+  [fastchess](https://github.com/Disservin/fastchess), and the bundled `duel.py`
+  (xboard).
+- **Resumable studies** — interrupt and continue later using the same `--study-name`
+  (trials are stored in an SQLite database).
+- **Trial pruning** with a threshold pruner to abandon clearly losing trials early.
+- **Int and float parameters**, defined inline or from a **JSON / YAML file**.
+- **Common parameters** applied to both engines (e.g. fixed `Hash`).
+- **Time control or fixed depth/nodes** matches, with draw and resign adjudication.
+- **CPU thread affinity** for fastchess (`--use-affinity`) to reduce result noise.
+- **Plots** (history, contour, slice, parallel, importance) saved as PNG, plus live
+  monitoring through the **optuna-dashboard**.
 
+## How it works
+
+1. Prepare the engine(s) and the parameters to optimize, and pick a trial budget.
+2. Each trial plays a match between a **test** engine (optimizer-suggested params) and
+   a **base** engine (the current best params; initially the defaults).
+3. The match result — score rate `(wins + draws/2) / games` or Elo, from the test
+   engine's point of view — is returned to Optuna. If the test engine is better, its
+   params become the new best.
+4. Optuna suggests the next parameter set and the loop repeats until the trial budget
+   is reached (plots and a CSV summary are written automatically).
+5. Re-running with the same `--study-name` resumes and extends the study.
+
+## Requirements
+
+- **Python 3.9, 3.10, or 3.11**
+
+| Package           | Version  | Purpose                                            |
+| ----------------- | -------- | -------------------------------------------------- |
+| optuna            | 4.9.0    | Optimization framework (required)                  |
+| optuna-dashboard  | 0.20.0   | Web dashboard to inspect trials (optional)         |
+| pandas            | 2.3.3    | Save study results to CSV (optional)               |
+| matplotlib        | 3.11.0   | Render plots as PNG (required for `--plot`)        |
+| scikit-learn      | 1.9.0    | Parameter-importance plot (optional)               |
+| cmaes             | 0.13.0   | CMA-ES sampler (optional, needed for `name=cmaes`) |
+
+Install everything at once with `pip install -r requirements.txt`.
+
+## Installation
+
+```bash
+git clone https://github.com/fsmosca/Optuna-Game-Parameter-Tuner.git
+cd Optuna-Game-Parameter-Tuner
+
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
+
+pip install -r requirements.txt
 ```
-PS F:\Tmp> git clone https://github.com/fsmosca/Optuna-Game-Parameter-Tuner.git
+
+A step-by-step Windows guide is available on the
+[wiki](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-10-setup).
+
+## Quickstart
+
+Run a short study tuning a few Stockfish evaluation parameters at fixed depth, using
+the bundled engine, opening book, and cutechess-cli:
+
+```bash
+python tuner.py ^
+  --engine ./engines/stockfish-modern/stockfish.exe ^
+  --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd ^
+  --input-param "{'eMobilityBonus[2][10]': {'default':158, 'min':100, 'max':200, 'step':2}, 'mOutpost[0]': {'default':56, 'min':0, 'max':100, 'step':4}}" ^
+  --depth 4 --games-per-trial 10 --trials 20 --concurrency 2 ^
+  --study-name quickstart --pgn-output quickstart.pgn --plot
 ```
 
-### Install on virtual environment on Windows 10
-See [page](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Windows-10-setup) from wiki.
+(`^` is the Windows line-continuation; use `\` on Linux/macOS.) This creates
+`quickstart.db` (resumable study), `quickstart.pgn` (games), `quickstart.csv`
+(results), and PNG plots in `visuals/`.
 
-### General setup guide
+## Match managers
 
-#### Required
-* Install python 3.9, 3.10 or 3.11
-  * Visit https://www.python.org/downloads/
-* Install optuna
-  * pip install optuna==4.9.0
-  
-#### Visualization
-Plots are saved as static PNG images in the `visuals` folder via optuna's
-matplotlib backend, so they can be viewed without a browser (handy on headless
-Linux boxes) and stay small. scikit-learn is required for the parameter-importance
-plot.
+The tuner drives matches through an external **match manager**, selected with
+`--match-manager`:
 
-#### To use the cmaes sampler
-* pip install cmaes==0.13.0
+| Manager      | Value       | Engines     | Notes                                          |
+| ------------ | ----------- | ----------- | ---------------------------------------------- |
+| cutechess-cli| `cutechess` | UCI / xboard| Default. Windows `cutechess-cli.exe` bundled.  |
+| fastchess    | `fastchess` | UCI only    | Fast, cutechess-compatible; supports affinity. |
+| duel.py      | `duel`      | xboard      | Bundled pure-Python manager.                   |
 
-#### Save studies to pandas dataframe and csv file
-* pip install pandas==2.3.3
+### Choosing the executable
 
-#### Install all dependencies
+By default each manager looks for its binary in `tourney_manager/<manager>/` and then
+on the `PATH`. Override the location with `--match-manager-file`, always **paired** with
+the matching `--match-manager` flavor (the command syntax differs per manager):
 
-Instead of installing each module like optuna, plotly and others. Just install with requirements.txt.  
-* pip install -r requirements.txt
-  
-## C. Basic optimization process outline
-1. Prepare the engines and the parameters to be optimized. Set max_trial to 1000 or so.
-2. Setup a game match between 2 engines, the test engine and base engine. The test engine will use the parameters suggested by optuna optimizer while the base engine will use the initial or default parameter values. In the beginning the best parameter is the initial parameter. The test engine will use the initial parameter values suggested by the optimimzer.
-3. After a match of say 24 games, the result of test engine will be sent to the optimizer. The result can be a score rate like (wins+draw/2)/24 or an Elo from the point of view of the test engine. If the test engine wins (score > 0.5) or elo > 0.0, update the best parameter to the parameter used by test engine.
-4. Check the number of trials done. If trial >= max_trial stop the optimization and save the plots. This is automatically done by the optimizer.
-5. Get the new parameter values suggested by the optimizer. This will be used by the test engine.
-6. Run a new match, goto step 3.
-7. You can extend the study or optimization by running the study again using the same study_name and conditions.
+```bash
+# cutechess at a custom location (e.g. self-compiled on Linux)
+--match-manager cutechess --match-manager-file /home/user/cutechess/cutechess-cli
 
-## D. Supported Samplers/Optimizers
-* [TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html#optuna.samplers.TPESampler) or Tree-structured Parzen Estimator
-* [CMAES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html) or Covariance Matrix Adaptation Evolution Strategy
+# fastchess (no binary ships with this repo — supply your own)
+--match-manager fastchess --match-manager-file C:/tools/fastchess/fastchess.exe
 
-## E. Help
-See [help](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help) in wiki.
-Or type `python tuner.py -h`
-
-## F. Sample command line
-#### Using tpe optimizer
-```python
-python tuner.py --sampler name=tpe --engine ./engines/deuterium/deuterium --concurrency 6 --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd --input-param "{'PawnValueEn': {'default':92, 'min':90, 'max':120, 'step':2}, 'BishopValueOp': {'default':350, 'min':290, 'max':350, 'step':3}}" --games-per-trial 24 --plot --base-time-sec 15 --inc-time-sec 0.1 --study-name study1 --pgn-output study1.pgn --trials 100 --common-param "{'Hash': 128}"
-```
-
-#### Specify the match-manager location
-By default the cutechess manager uses the bundled
-`tourney_manager/cutechess/cutechess-cli.exe` (Windows) and otherwise looks for
-`cutechess-cli` on the `PATH`. On Linux, `cutechess-cli` usually has to be compiled
-from source, so you can point the tuner straight at your binary with
-`--match-manager-file` (this also works for a custom `.exe` on Windows):
-
-```python
---match-manager-file /home/user/cutechess/cutechess-cli
-```
-
-Resolution order for cutechess is: `--match-manager-file` → bundled binary →
-`cutechess-cli` on `PATH`.
-
-The same flag works for the duel.py manager (xboard engines), where it points at a
-`duel.py` in a custom location:
-
-```python
+# duel.py in a custom location
 --match-manager duel --match-manager-file /home/user/duel.py
 ```
 
-#### Use fastchess as match manager
-[fastchess](https://github.com/Disservin/fastchess) is a fast, cutechess-cli-compatible
-alternative. Select it with `--match-manager fastchess`. No fastchess binary ships with
-this repo, so supply your own via `--match-manager-file`, or place a
-`fastchess`/`fastchess.exe` on the `PATH`, or drop it into `tourney_manager/fastchess/`:
+Resolution order: `--match-manager-file` → `tourney_manager/<manager>/<binary>` →
+binary on `PATH`. Passing `--match-manager-file` without `--match-manager` is an error,
+since the flavor cannot be inferred from the path.
 
-```python
---match-manager fastchess --match-manager-file /home/user/fastchess/fastchess
---match-manager fastchess --match-manager-file C:/tools/fastchess/fastchess.exe
-```
+### fastchess thread affinity
 
-Note: fastchess only supports **UCI** engines (no xboard/cecp). Resolution order is
-`--match-manager-file` → `tourney_manager/fastchess/fastchess[.exe]` → `fastchess` on
-the `PATH`.
+fastchess can pin engine threads to specific CPU cores, which reduces variance in match
+results. Use `--use-affinity` bare to auto-bind, or pass a core list/range:
 
-fastchess can bind engine threads to CPU cores via `--use-affinity`, which reduces
-result variance. Use it bare to auto-bind, or pass a core list/range:
-
-```python
+```bash
 --match-manager fastchess --use-affinity
 --match-manager fastchess --use-affinity 3,5,7-11,13
 ```
 
-`--use-affinity` is only valid with `--match-manager fastchess`.
+`--use-affinity` is only valid with `--match-manager fastchess`, which is UCI-only
+(it cannot run xboard/cecp engines).
 
-#### Use Elo as objective value instead of score rate
-Use the flag  
-`--elo-objective`
+## Defining parameters
 
-#### Deterministic and Non-Deterministic objective function
-Our objective function result is the result of engine vs engine match. There are engines at fixed depth move control that are deterministic that is if you play the same opening at fixed depth of 2 for 100 games and repeat the same the result of the match is the same. The samplers such as TPE and CMAES may suggest parameter values that were already suggested before. By default the tuner will not replay the match it will just return the previous result.
+### Inline
 
-There is a flag that play a match for repeated parameter suggestions and it is called `--noisy-result`. This is mainly applied when more than one same parameter matches produces different results this is called non-determinisitic or stochastic result. An example situation is when you play a match with a time control instead of fixed depth. Conduct a match #1 at time control of 5s+100ms for 100 games with opening set #1, then do match #2 with opening set #2, most likely the result is not the same. Note that during matches each opening is played twice. In this case it is better to add the `--noisy-result` flag in the command line.
+Each parameter is a dict with `default`, `min`, `max`, and `step`. Integers are assumed;
+add `'type': 'float'` for floating-point parameters.
 
-An example log when `--noisy-result` flag is enabled and sampler repeats suggesting param values. Objective value type is elo with `--elo-objective` flag.  
-```python
-starting trial: 149 ...
-deterministic function: False
-Duplicate suggestion from sampler, {'Pp2': 10, 'Pp6': 3}
-Execute engine match as --noisy-result flag is enabled.
-suggested param for test engine: {'Pp2': 10, 'Pp6': 3}
-param for base engine          : {'Pp2': 7, 'Pp6': 2}
-common param: {'Hash': 128, 'EvalHash': 4}
-init param: {'Pp2': 7, 'Pp6': 2}
-init objective value: 0.0
-study best param: {'Pp2': 10, 'Pp6': 1}
-study best objective value: Elo 124.0
-study best trial number: 1
-Actual match result: Elo 22.0, CI: [-75.9, +119.4], CL: 95%, G/W/D/L: 32/11/12/9, POV: optimizer
-Elo Diff: +21.7, ErrMargin: +/- 97.6, CI: [-75.9, +119.4], LOS: 67.3%, DrawRatio: 37.50%
-test param format for match manager: option.Pp2=10 option.Pp6=3
-result sent to optimizer: 22.0
-elapse: 0h:0m:19s
-Trial 149 finished with value: 22.0 and parameters: {'Pp2': 10, 'Pp6': 3}. Best is trial 1 with value: 124.0.
+```bash
+# integer parameters
+--input-param "{'pawn': {'default':92, 'min':90, 'max':120, 'step':2}, 'knight': {'default':300, 'min':250, 'max':350, 'step':2}}"
+
+# float parameters
+--input-param "{'CPuct': {'default':2.147, 'min':1.0, 'max':3.0, 'step':0.05, 'type':'float'}}"
 ```
 
-#### Command line with float parameter values
-Add a key value pair of `'type': 'float'`
-```python
---input-param "{'CPuct': {'default':2.147, 'min':1.0, 'max':3.0, 'step':0.05, 'type': 'float'}, 'CPuctBase': {'default':18368.0, 'min':15000.0, 'max':20000.0, 'step':2.0, 'type': 'float'}, 'CPuctFactor': {'default':2.82, 'min':0.5, 'max':3.5, 'step':0.05, 'type': 'float'}, 'FpuValue': {'default':0.443, 'min':-0.1, 'max':1.2, 'step':0.05, 'type': 'float'}, 'PolicyTemperature': {'default':1.61, 'min':0.5, 'max':3.0, 'step':0.05, 'type': 'float'}}"
+### From a JSON or YAML file
+
+For larger sets, use `--input-param-file` instead of inline `--input-param` (define one
+or the other). The file may be JSON (`.json`) or YAML (`.yaml`/`.yml`) with the same
+structure; YAML also allows comments. Sample files live in [`yaml_files/`](yaml_files).
+
+```bash
+python tuner.py --input-param-file yaml_files/params.yaml ...
 ```
 
-#### Parameters from a JSON or YAML file
-For larger parameter sets, put them in a file and use `--input-param-file`
-instead of the inline `--input-param` (define one or the other). The file may be
-JSON (`.json`) or YAML (`.yaml`/`.yml`), with the same structure. YAML also lets
-you add comments.
-```python
-python tuner.py --input-param-file params.yaml ...
-```
-`params.yaml`:
+`yaml_files/params.yaml`:
+
 ```yaml
 # Search-margin tuning
 RazorMargin1:          {default: 220, min: 150, max: 400, step: 1}
 QSearchFutilityMargin: {default: 100, min: 50,  max: 200, step: 1}
 CPuct:                 {default: 2.147, min: 1.0, max: 3.0, step: 0.05, type: float}
 ```
-`params.json`:
-```json
-{
-  "RazorMargin1":          {"default": 220, "min": 150, "max": 400, "step": 1},
-  "QSearchFutilityMargin": {"default": 100, "min": 50,  "max": 200, "step": 1}
-}
+
+### Common parameters
+
+Parameters that should be sent to **both** engines (and not optimized) — for example a
+fixed transposition `Hash` — go in `--common-param` (or `--common-param-file`). Do not
+repeat them in `--input-param`.
+
+```bash
+--common-param "{'Hash': 128, 'EvalHash': 4}"
 ```
-There is an equivalent `--common-param-file` for the common parameters.
 
+## Objective: score rate vs Elo
 
-## G. Optimization studies
+By default the objective is the **score rate** `(wins + draws/2) / games` from the test
+engine's point of view (`> 0.5` means the new parameters are winning). Add
+`--elo-objective` to use **Elo difference** instead.
 
-* [Chess Piece Value Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
-* [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
-* [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
-* [Optimization with Threshold Pruner](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/commit/eb595ecb7a752cf2db6d8752b7480c59f696c7b7#commitcomment-42769655)
-* [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison)
-* [Performance comparison between tpe multivariate and cmaes](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison-between-tpe-multivariate-and-cmaes)
+### Deterministic vs noisy matches
 
-## H. Optuna dashboard
+At **fixed depth**, replaying the same parameters with the same openings yields the same
+result, so when a sampler re-suggests a parameter set the tuner reuses the previous
+result instead of replaying. Under **time control** results are noisy, so add
+`--noisy-result` to force a replay on repeated suggestions.
 
-Trials can be viewed from the dashboard.
+A sample trial log with `--elo-objective` and `--noisy-result`:
 
+```text
+starting trial: 149 ...
+deterministic function: False
+Duplicate suggestion from sampler, {'Pp2': 10, 'Pp6': 3}
+Execute engine match as --noisy-result flag is enabled.
+Actual match result: Elo 22.0, CI: [-75.9, +119.4], CL: 95%, G/W/D/L: 32/11/12/9, POV: optimizer
+result sent to optimizer: 22.0
+Trial 149 finished with value: 22.0 and parameters: {'Pp2': 10, 'Pp6': 3}. Best is trial 1 with value: 124.0.
 ```
+
+## Pruning unpromising trials
+
+`--threshold-pruner` stops a trial early when the partial match result is clearly
+losing, saving time. Example with 100 games per trial:
+
+```bash
+--games-per-trial 100 --threshold-pruner result=0.45 games=50 interval=1
+```
+
+After the first 50 games, if the score is below `0.45` the trial is pruned and a new one
+starts. Defaults: `result=0.25`, `games=games_per_trial/2`, `interval=1`. With
+`--elo-objective` the `result` is expressed in Elo (e.g. `result=-10`).
+
+## Samplers / optimizers
+
+<a id="d-supported-optimizers"></a>
+
+- **[TPE](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html)** (Tree-structured Parzen Estimator) — the default.
+- **[CMA-ES](https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html)** (Covariance Matrix Adaptation Evolution Strategy).
+
+```bash
+--sampler name=tpe multivariate=true group=true n_startup_trials=6
+--sampler name=cmaes sigma0=20 n_startup_trials=6
+```
+
+Run `python tuner.py -h` for the full list of per-sampler options.
+
+## Command-line reference
+
+Only the most common options are listed; run `python tuner.py -h` for the complete set.
+
+### Required
+
+| Option           | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| `--engine`       | Engine path/filename.                              |
+| `--opening-file` | Opening start positions (pgn, fen, or epd).        |
+| `--input-param` / `--input-param-file` | Parameters to optimize (one is required). |
+
+### Match & time control
+
+| Option              | Default | Description                                      |
+| ------------------- | ------- | ------------------------------------------------ |
+| `--match-manager`   | cutechess | `cutechess`, `fastchess`, or `duel`.           |
+| `--match-manager-file` | –    | Custom path to the match-manager executable.     |
+| `--use-affinity`    | off     | fastchess only: bind engine threads to CPU cores.|
+| `--protocol`        | uci     | `uci` or `cecp` (xboard).                         |
+| `--base-time-sec`   | 5       | Base time (s) for time-control matches.          |
+| `--inc-time-sec`    | 0.05    | Increment (s) per move.                           |
+| `--depth`           | –       | Fixed search depth (instead of time control).    |
+| `--nodes`           | –       | Fixed node count (cutechess).                     |
+| `--opening-format`  | pgn     | `pgn` or `epd`.                                   |
+| `--concurrency`     | 1       | Games played in parallel.                         |
+
+### Adjudication
+
+| Option              | Default | Description                                      |
+| ------------------- | ------- | ------------------------------------------------ |
+| `--draw-movenumber` | –       | Moves before draw adjudication is considered.    |
+| `--draw-movecount`  | 6       | Consecutive moves under the draw score.          |
+| `--draw-score`      | 0       | Draw score threshold (cp).                        |
+| `--resign-movecount`| –       | Consecutive moves under the resign score.        |
+| `--resign-score`    | –       | Resign score threshold (cp).                      |
+
+### Optimization & output
+
+| Option              | Default | Description                                      |
+| ------------------- | ------- | ------------------------------------------------ |
+| `--trials`          | 1000    | Number of trials.                                |
+| `--games-per-trial` | 32      | Games per trial (even number).                   |
+| `--sampler`         | tpe     | `name=tpe` or `name=cmaes` (+ options).          |
+| `--threshold-pruner`| off     | Prune losing trials early.                        |
+| `--elo-objective`   | off     | Use Elo instead of score rate.                   |
+| `--noisy-result`    | off     | Replay matches on repeated suggestions.          |
+| `--common-param` / `--common-param-file` | – | Params sent to both engines.       |
+| `--study-name`      | default_study_name | Study/DB name (used to resume).       |
+| `--direction`       | maximize| `maximize` or `minimize`.                        |
+| `--variant`         | normal  | Game variant.                                    |
+| `--pgn-output`      | optuna_games.pgn | Output PGN filename.                    |
+| `--plot`            | off     | Save plots to `visuals/`.                         |
+| `--save-plots-every-trial` | 10 | Plot frequency (trials).                       |
+
+## Examples
+
+Ready-to-run batch files are in [`examples/`](examples):
+
+| File | Description |
+| ---- | ----------- |
+| [`example1_optimizer_tpe.bat`](examples/example1_optimizer_tpe.bat) | TPE sampler, fixed depth, with threshold pruner. |
+| [`example2_fastchess_tpe.bat`](examples/example2_fastchess_tpe.bat) | TPE via the fastchess manager with `--use-affinity`. |
+| [`example3_musketeerchess_piecevalue_opt_tpe.bat`](examples/example3_musketeerchess_piecevalue_opt_tpe.bat) | Musketeer-chess piece-value tuning via the duel manager. |
+| [`example4_optimizer_cmaes.bat`](examples/example4_optimizer_cmaes.bat) | CMA-ES sampler. |
+
+## Plots & visualization
+
+With `--plot`, the tuner writes plots to the [`visuals/`](visuals) folder every
+`--save-plots-every-trial` trials, named `<study_name>_<trial><type>.png` where `type`
+is one of `hist`, `contour`, `slice`, `parallel`, `importance`. Plots are rendered as
+static PNGs via Optuna's matplotlib backend, so they work on headless Linux machines and
+need no browser. (The importance plot requires scikit-learn.)
+
+![contour plot](images/contour.png)
+
+## Optuna dashboard
+
+Trials can also be inspected live in the [optuna-dashboard](https://github.com/optuna/optuna-dashboard).
+The study database is named `<study_name>.db`:
+
+```bash
 pip install optuna-dashboard
-```
-
-**Sample command line**
-
-Take note on the study-name. We will use that in the dashboard.
-
-```
-python tuner.py --study-name cdrill2000_razor_testpos --sampler name=tpe --engine "F:/Project/my_cdrill/cdrill2000.exe" ^
---concurrency 4 ^
---opening-file ./start_opening/ogpt_chess_startpos.epd ^
---opening-format epd ^
---input-param "{'RazorMargin': {'default':200, 'min':30, 'max':300, 'step':5}, 'PassedPawnWeight': {'default':100, 'min':30, 'max':500, 'step':5}}" ^
---base-time-sec 10 ^
---inc-time-sec 0.1 ^
---draw-movenumber 30 --draw-movecount 6 --draw-score 0 ^
---resign-movecount 3 --resign-score 500 ^
---games-per-trial 100 --trials 100 --plot ^
---pgn-output cdrill200_razor_test_games.pgn ^
---elo-objective ^
---noisy-result
-```
-
-From the command line the study name is `cdrill2000_razor_testpos`. A trial database will be created with the name `cdrill2000_razor_testpos.db` The command line to run dashboard is:
-
-```
 optuna-dashboard sqlite:///cdrill2000_razor_testpos.db
+# Listening on http://127.0.0.1:8080/
 ```
 
+Open `http://127.0.0.1:8080/` in your browser.
+
+![dashboard](https://user-images.githubusercontent.com/22366935/208231724-32d9692a-cf09-4f32-b0d3-97dcb92f0c70.png)
+
+## Tools
+
+Helper utilities for preparing opening books and analyzing results live in
+[`tools/`](tools):
+
+| Script | Description |
+| ------ | ----------- |
+| [`deduplicator.py`](tools/deduplicator.py) | Remove duplicate positions from an EPD/FEN opening file. |
+| [`shuffler.py`](tools/shuffler.py) | Randomly shuffle the lines of a file (e.g. opening order). |
+| [`filter.py`](tools/filter.py) | Filter musketeer-stockfish FENs by piece criteria. |
+| [`getelo.py`](tools/getelo.py) | Compute Elo, error margins, LOS and draw ratio from W/L/D stats. |
+
+## Project structure
+
+```text
+tuner.py             Main tuner script
+requirements.txt     Python dependencies
+engines/             Sample engines (deuterium, musketeer, stockfish-modern)
+start_opening/       Opening books (epd/fen/pgn)
+tourney_manager/     Match managers: cutechess/ (bundled), duel/, fastchess/
+examples/            Example .bat command lines
+yaml_files/          Sample parameter files (params.yaml, common.yaml)
+tools/               Opening-book and result utilities
+visuals/             Generated plots
+images/              README screenshots
 ```
-(venv) PS F:\Github\Optuna-Game-Parameter-Tuner> optuna-dashboard sqlite:///cdrill2000_razor_testpos.db
-Listening on http://127.0.0.1:8080/
-Hit Ctrl-C to quit.
-```
 
-Visit `http://127.0.0.1:8080/` on your browser.
+## Optimization studies
 
-![image](https://user-images.githubusercontent.com/22366935/208231724-32d9692a-cf09-4f32-b0d3-97dcb92f0c70.png)
+- [Chess Piece Value Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-piece-value-optimization)
+- [Chess Evaluation Positional Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Chess-Evaluation-Positional-Parameter-Optimization)
+- [Search Parameter Optimization](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Search-Parameter-Optimization)
+- [Optimization Performance Comparison](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison)
+- [TPE multivariate vs CMA-ES](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Performance-comparison-between-tpe-multivariate-and-cmaes)
 
+More help is on the [wiki](https://github.com/fsmosca/Optuna-Game-Parameter-Tuner/wiki/Help),
+or run `python tuner.py -h`.
 
-## I. Credits
-* Optuna  
-https://github.com/optuna/optuna
-* Cutechess  
-https://github.com/cutechess/cutechess
-* Fastchess  
-https://github.com/Disservin/fastchess
-* Sklearn  
-https://scikit-learn.org/stable/
-* [Stockfish](https://stockfishchess.org/)
+## Credits
+
+- [Optuna](https://github.com/optuna/optuna) — optimization framework
+- [cutechess](https://github.com/cutechess/cutechess) — match manager
+- [fastchess](https://github.com/Disservin/fastchess) — match manager
+- [scikit-learn](https://scikit-learn.org/stable/) — parameter importance
+- [Stockfish](https://stockfishchess.org/) — sample engine
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2020 fsmosca.
