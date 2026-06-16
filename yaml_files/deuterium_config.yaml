@@ -1,0 +1,40 @@
+# Unified configuration for tuner.py.
+#
+# A single run can be described entirely by this file:
+#   python tuner.py --config yaml_files/deuterium_config.yaml
+#
+# Three sections:
+#   input_param   - the parameters Optuna optimizes (name -> {default,min,max,step[,type]})
+#   common_param  - fixed values sent to BOTH engines (must NOT appear in input_param)
+#   options       - everything else, keyed by the long flag name with underscores
+#                   (e.g. --match-manager -> match_manager). Any flag passed on the
+#                   command line overrides the value here.
+
+# Parameters Optuna optimizes.
+input_param:
+  RazorMarginDepth1: {default: 220, min: 100, max: 400, step: 1}
+  RazorMarginDepth2: {default: 235, min: 100, max: 400, step: 1}
+  RazorMarginDepth3: {default: 250, min: 100, max: 400, step: 1}
+  GoodEvalPruningMargin: {default: 60, min: 10, max: 150, step: 1}
+
+# Fixed values sent to BOTH engines (do not also list these in input_param).
+common_param:
+  Hash: 64
+
+# Everything else. Keys match the long flag names (underscores instead of dashes).
+options:
+  engine: ./engines/deuterium/deuterium.exe
+  opening_file: ./start_opening/ogpt_chess_startpos.epd
+  opening_format: epd
+  match_manager: cutechess
+  match_manager_file: "./tourney_manager/cutechess/cutechess-cli.exe"
+  trials: 20
+  games_per_trial: 20
+  concurrency: 8
+  base_time_sec: 3
+  inc_time_sec: 0.1
+  study_name: deuterium_search_study_1
+  pgn_output: deuterium_search_study_1_games.pgn
+  plot: true
+  sampler: {name: tpe, multivariate: true, n_startup_trials: 6}
+  threshold_pruner: {result: 0.35, games: 10, interval: 1}  # games by default is games_per_trial/2
