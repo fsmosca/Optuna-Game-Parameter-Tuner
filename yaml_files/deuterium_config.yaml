@@ -24,8 +24,7 @@ common_param:
 # Everything else. Keys match the long flag names (underscores instead of dashes).
 options:
   engine: ./engines/deuterium/deuterium.exe
-  opening_file: ./start_opening/ogpt_chess_startpos.epd
-  opening_format: epd
+  opening_file: ./start_opening/ogpt_chess_startpos.epd  # format auto-detected from extension
   match_manager: cutechess
   match_manager_file: "./tourney_manager/cutechess/cutechess-cli.exe"
   trials: 20
