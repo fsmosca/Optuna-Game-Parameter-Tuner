@@ -915,6 +915,24 @@ def resolve_param(inline_value, file_path, required, name, config_value=None):
     return None
 
 
+def detect_opening_format(opening_file):
+    """
+    Derive the cutechess/fastchess opening 'format' token from the opening file
+    extension: .pgn -> 'pgn'; .epd/.fen -> 'epd' (both managers consume the EPD
+    form). Any other extension stops the run with an error logged to both the
+    console and log_tuner.txt.
+    """
+    suffix = Path(opening_file).suffix.lower()
+    if suffix == '.pgn':
+        return 'pgn'
+    if suffix in ('.epd', '.fen'):
+        return 'epd'
+    msg = (f'Unsupported opening file extension "{suffix}" for "{opening_file}"; '
+           f'use .pgn, .epd or .fen.')
+    logger.error(msg)
+    raise SystemExit(1)
+
+
 def mapping_to_cli_tokens(mapping):
     """
     Convert a config mapping such as {'name': 'tpe', 'multivariate': True} into
@@ -1030,15 +1048,14 @@ def main():
                              'This is only applicable to cutechess match manager.')
     parser.add_argument('--opening-file', required=False, type=str,
                         help='Start opening filename in pgn, fen or epd format.\n'
-                             'If match manager is cutechess, you can use pgn, fen\n'
-                             'or epd format. The format is hard-coded currently.\n'
-                             'You have to modify the code.\n'
+                             'The format is auto-detected from the extension\n'
+                             '(.pgn -> pgn; .epd/.fen -> epd); other extensions stop the run.\n'
                              'Required, but may instead be set via the --config file '
                              '(options.opening_file).')
     parser.add_argument('--opening-format', required=False, type=str,
-                        help='Can be pgn, or epd for cutechess match manager,'
-                             'default is pgn, for duel.py no need as it will use epd or fen.',
-                        default='pgn')
+                        help='Deprecated/ignored: the format is auto-detected from the\n'
+                             'opening file extension (.pgn -> pgn; .epd/.fen -> epd).',
+                        default=None)
     parser.add_argument('--opening-posperfile', required=False, type=int,
                         help='number of positions per startpos file for duel.py match manager only.\n'
                         'If not specified then all positions will be considered.',
@@ -1170,6 +1187,10 @@ def main():
     if args.opening_file is None:
         raise Exception(
             'Define the opening file via --opening-file or the config "options.opening_file".')
+
+    # Auto-detect the opening format from the file extension (authoritative).
+    args.opening_format = detect_opening_format(args.opening_file)
+    logger.info(f'opening file: {args.opening_file}, format: {args.opening_format}')
 
     # Check if engine file exists.
     eng_path = Path(args.engine)
