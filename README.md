@@ -188,14 +188,8 @@ add `'type': 'float'` for floating-point parameters.
 ### From a JSON or YAML file
 
 For larger sets, use `--input-param-file` instead of inline `--input-param` (define one
-or the other). The file may be JSON (`.json`) or YAML (`.yaml`/`.yml`) with the same
-structure; YAML also allows comments. Sample files live in [`yaml_files/`](yaml_files).
-
-```bash
-python tuner.py --input-param-file yaml_files/params.yaml ...
-```
-
-`yaml_files/params.yaml`:
+or the other). The file may be JSON (`.json`) or YAML (`.yaml`/`.yml`) with the
+`name: {default, min, max, step}` structure; YAML also allows comments.
 
 ```yaml
 # Search-margin tuning
@@ -213,6 +207,50 @@ repeat them in `--input-param`.
 ```bash
 --common-param "{'Hash': 128, 'EvalHash': 4}"
 ```
+
+### Unified config file (recommended)
+
+Instead of spreading a run across many flags, describe the whole thing in one YAML (or
+JSON) file and pass it with `--config`. A sample lives in
+[`yaml_files/deuterium_config.yaml`](yaml_files/deuterium_config.yaml):
+
+```bash
+python tuner.py --config yaml_files/deuterium_config.yaml
+```
+
+The file has three sections:
+
+| Section        | Holds                                                                 |
+| -------------- | --------------------------------------------------------------------- |
+| `input_param`  | the parameters to optimize (same structure as `--input-param-file`)   |
+| `common_param` | fixed values sent to **both** engines (must not appear in `input_param`) |
+| `options`      | everything else, keyed by the long flag name with underscores         |
+
+```yaml
+input_param:
+  RazorMarginDepth1: {default: 220, min: 100, max: 400, step: 1}
+  GoodEvalPruningMargin: {default: 60, min: 10, max: 150, step: 1}
+
+common_param:
+  Hash: 64
+
+options:
+  engine: ./engines/deuterium/deuterium.exe
+  opening_file: ./start_opening/ogpt_chess_startpos.epd
+  match_manager: cutechess          # --match-manager  -> match_manager
+  trials: 20
+  plot: true
+  sampler: {name: tpe, multivariate: true, n_startup_trials: 6}
+```
+
+**Precedence:** any flag passed on the command line overrides the value in the config,
+which in turn overrides the built-in default. So `--config deuterium_config.yaml --trials 5`
+runs 5 trials regardless of what the file says. The boolean flags `--plot`,
+`--elo-objective` and `--noisy-result` each have a `--no-*` counterpart
+(`--no-plot`, `--no-elo-objective`, `--no-noisy-result`) so a config `true` can be turned
+off for a single run. `sampler` and `threshold_pruner` are written as mappings here (not
+the `key=value` form used on the command line). The older `--input-param-file` /
+`--common-param-file` flags still work and take precedence over the config's sections.
 
 ## Objective: score rate vs Elo
 
@@ -274,9 +312,15 @@ Only the most common options are listed; run `python tuner.py -h` for the comple
 
 | Option           | Description                                        |
 | ---------------- | -------------------------------------------------- |
-| `--engine`       | Engine path/filename.                              |
-| `--opening-file` | Opening start positions (pgn, fen, or epd).        |
-| `--input-param` / `--input-param-file` | Parameters to optimize (one is required). |
+| `--engine`       | Engine path/filename (or `options.engine` in `--config`). |
+| `--opening-file` | Opening start positions (pgn, fen, or epd; or `options.opening_file`). |
+| `--input-param` / `--input-param-file` | Parameters to optimize (one is required, or the `input_param` config section). |
+
+### Config
+
+| Option     | Default | Description                                                  |
+| ---------- | ------- | ------------------------------------------------------------ |
+| `--config` | –       | One YAML/JSON file with `input_param`, `common_param` and an `options` section. CLI flags override it. |
 
 ### Match & time control
 
@@ -311,14 +355,14 @@ Only the most common options are listed; run `python tuner.py -h` for the comple
 | `--games-per-trial` | 32      | Games per trial (even number).                   |
 | `--sampler`         | tpe     | `name=tpe` or `name=cmaes` (+ options).          |
 | `--threshold-pruner`| off     | Prune losing trials early.                        |
-| `--elo-objective`   | off     | Use Elo instead of score rate.                   |
-| `--noisy-result`    | off     | Replay matches on repeated suggestions.          |
+| `--elo-objective`   | off     | Use Elo instead of score rate (`--no-elo-objective` to disable). |
+| `--noisy-result`    | off     | Replay matches on repeated suggestions (`--no-noisy-result` to disable). |
 | `--common-param` / `--common-param-file` | – | Params sent to both engines.       |
 | `--study-name`      | default_study_name | Study/DB name (used to resume).       |
 | `--direction`       | maximize| `maximize` or `minimize`.                        |
 | `--variant`         | normal  | Game variant.                                    |
 | `--pgn-output`      | optuna_games.pgn | Output PGN filename.                    |
-| `--plot`            | off     | Save plots to `visuals/`.                         |
+| `--plot`            | off     | Save plots to `visuals/` (`--no-plot` to disable). |
 | `--save-plots-every-trial` | 10 | Plot frequency (trials).                       |
 
 ## Examples
@@ -378,7 +422,7 @@ engines/             Sample engines (deuterium, musketeer, stockfish-modern)
 start_opening/       Opening books (epd/fen/pgn)
 tourney_manager/     Match managers: cutechess/ (bundled), duel/, fastchess/
 examples/            Example .bat command lines
-yaml_files/          Sample parameter files (params.yaml, common.yaml)
+yaml_files/          Sample unified run config (deuterium_config.yaml)
 tools/               Opening-book and result utilities
 visuals/             Generated plots
 images/              README screenshots
