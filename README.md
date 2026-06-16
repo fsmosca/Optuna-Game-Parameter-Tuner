@@ -115,7 +115,7 @@ the bundled engine, opening book, and cutechess-cli:
 ```bash
 python tuner.py ^
   --engine ./engines/stockfish-modern/stockfish.exe ^
-  --opening-file ./start_opening/ogpt_chess_startpos.epd --opening-format epd ^
+  --opening-file ./start_opening/ogpt_chess_startpos.epd ^
   --input-param "{'eMobilityBonus[2][10]': {'default':158, 'min':100, 'max':200, 'step':2}, 'mOutpost[0]': {'default':56, 'min':0, 'max':100, 'step':4}}" ^
   --depth 4 --games-per-trial 10 --trials 20 --concurrency 2 ^
   --study-name quickstart --pgn-output quickstart.pgn --plot
@@ -334,7 +334,7 @@ Only the most common options are listed; run `python tuner.py -h` for the comple
 | `--inc-time-sec`    | 0.05    | Increment (s) per move.                           |
 | `--depth`           | –       | Fixed search depth (instead of time control).    |
 | `--nodes`           | –       | Fixed node count (cutechess).                     |
-| `--opening-format`  | pgn     | `pgn` or `epd`.                                   |
+| `--opening-format`  | auto    | Ignored; auto-detected from the file extension (`.pgn`→pgn, `.epd`/`.fen`→epd). |
 | `--concurrency`     | 1       | Games played in parallel.                         |
 
 ### Adjudication
