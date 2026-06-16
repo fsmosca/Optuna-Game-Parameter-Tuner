@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v7.0.0'
+__version__ = 'v7.1.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -898,19 +898,69 @@ def load_params_from_file(path):
         f'Unsupported param file type "{suffix}" for {path}; use .json, .yaml or .yml.')
 
 
-def resolve_param(inline_value, file_path, required, name):
+def resolve_param(inline_value, file_path, required, name, config_value=None):
     """
-    Resolve a parameter dict from either a file (--<name>-file) or an inline
-    string (--<name>). The file takes precedence. Inline strings are parsed as
-    Python literals (single-quoted dicts) for backward compatibility.
+    Resolve a parameter dict. Precedence: --<name>-file, then inline --<name>,
+    then the matching section of the unified --config file. Inline strings are
+    parsed as Python literals (single-quoted dicts) for backward compatibility.
     """
     if file_path is not None:
         return load_params_from_file(file_path)
     if inline_value is not None:
         return ast.literal_eval(inline_value)
+    if config_value is not None:
+        return config_value
     if required:
-        raise Exception(f'Define {name} via --{name} or --{name}-file.')
+        raise Exception(f'Define {name} via --{name}, --{name}-file, or the config file.')
     return None
+
+
+def mapping_to_cli_tokens(mapping):
+    """
+    Convert a config mapping such as {'name': 'tpe', 'multivariate': True} into
+    the list-of-lists token form that get_sampler()/get_pruner() expect, e.g.
+    [['name=tpe', 'multivariate=true']]. Booleans are lowercased so the existing
+    "== 'true'" checks keep working.
+    """
+    tokens = []
+    for k, v in mapping.items():
+        if isinstance(v, bool):
+            v = 'true' if v else 'false'
+        tokens.append(f'{k}={v}')
+    return [tokens]
+
+
+def options_to_defaults(cfg_options, parser):
+    """
+    Translate the 'options' section of a --config file into argparse defaults.
+
+    Returns (defaults, sampler_tokens, pruner_tokens). 'defaults' is a dict for
+    parser.set_defaults(); sampler/threshold_pruner are returned separately
+    because they use a list-of-lists token structure rather than a plain value.
+    Keys are normalized ('-' -> '_') and validated against the known flags so
+    typos are caught early.
+    """
+    valid_dests = {a.dest for a in parser._actions
+                   if a.dest not in ('help', 'version', 'config')}
+
+    defaults = {}
+    sampler_tokens = None
+    pruner_tokens = None
+
+    for raw_key, value in cfg_options.items():
+        key = raw_key.replace('-', '_')
+        if key not in valid_dests:
+            raise Exception(
+                f'Unknown option "{raw_key}" in the config "options" section. '
+                f'Valid options: {", ".join(sorted(valid_dests))}.')
+        if key == 'sampler':
+            sampler_tokens = mapping_to_cli_tokens(value) if isinstance(value, dict) else value
+        elif key == 'threshold_pruner':
+            pruner_tokens = mapping_to_cli_tokens(value) if isinstance(value, dict) else value
+        else:
+            defaults[key] = value
+
+    return defaults, sampler_tokens, pruner_tokens
 
 
 def main():
@@ -919,8 +969,10 @@ def main():
         prog='%s %s' % (__script_name__, __version__),
         description='Optimize parameter values of a game agent using optuna framework.',
         epilog='%(prog)s')
-    parser.add_argument('--engine', required=True,
-                        help='Engine filename or engine path and filename.')
+    parser.add_argument('--engine', required=False,
+                        help='Engine filename or engine path and filename.\n'
+                             'Required, but may instead be set via the --config file '
+                             '(options.engine).')
     parser.add_argument('--draw-movenumber', required=False,
                         help='Number of moves reached before applying the draw adjudication.\n'
                              'If not specified then draw adjudication will be disabled.\n'
@@ -976,11 +1028,13 @@ def main():
     parser.add_argument('--nodes', required=False, type=int,
                         help='The maximum nodes that the engine is allowed to search.\n'
                              'This is only applicable to cutechess match manager.')
-    parser.add_argument('--opening-file', required=True, type=str,
+    parser.add_argument('--opening-file', required=False, type=str,
                         help='Start opening filename in pgn, fen or epd format.\n'
                              'If match manager is cutechess, you can use pgn, fen\n'
                              'or epd format. The format is hard-coded currently.\n'
-                             'You have to modify the code.')
+                             'You have to modify the code.\n'
+                             'Required, but may instead be set via the --config file '
+                             '(options.opening_file).')
     parser.add_argument('--opening-format', required=False, type=str,
                         help='Can be pgn, or epd for cutechess match manager,'
                              'default is pgn, for duel.py no need as it will use epd or fen.',
@@ -994,9 +1048,12 @@ def main():
     parser.add_argument('--pgn-output', required=False, type=str,
                         help='Output pgn filename, default=optuna_games.pgn.',
                         default='optuna_games.pgn')
-    parser.add_argument('--plot', action='store_true', help='A flag to output plots in png.')
-    parser.add_argument('--elo-objective', action='store_true', help='A flag to enable the elo as objective value instead of the default score rate.')
-    parser.add_argument('--noisy-result', action='store_true',
+    parser.add_argument('--plot', action=argparse.BooleanOptionalAction, default=False,
+                        help='Output plots in png. Use --no-plot to override a config "plot: true".')
+    parser.add_argument('--elo-objective', action=argparse.BooleanOptionalAction, default=False,
+                        help='Enable the elo as objective value instead of the default score rate.\n'
+                             'Use --no-elo-objective to override a config value.')
+    parser.add_argument('--noisy-result', action=argparse.BooleanOptionalAction, default=False,
                         help='A flag to replay engine vs engine match when sampler repeats suggesting same parameter values.\n'
                              'When you play an engine vs engine match at fixed depth, generally the result is not noisy.\n'
                              'When the sampler suggests a param that was already suggested before we just return the result from\n'
@@ -1078,10 +1135,41 @@ def main():
     parser.add_argument('--common-param-file', required=False, type=str,
                         help='Path to a JSON or YAML file with the common parameters,\n'
                              'as an alternative to --common-param.')
+    parser.add_argument('--config', required=False, type=str,
+                        help='Path to a single unified YAML/JSON config file holding\n'
+                             'input_param, common_param and an options section (the\n'
+                             'other flags, keyed by their long names with underscores).\n'
+                             'Any flag given on the command line overrides the config.\n'
+                             'Example: --config yaml_files/deuterium_config.yaml')
+
+    # First pass: read --config only, then fold its "options" section in as
+    # argparse defaults so that values still on the command line take precedence.
+    # --engine/--opening-file are optional here and validated after the merge.
+    pre_args, _ = parser.parse_known_args()
+
+    cfg = {}
+    cfg_sampler_tokens = None
+    cfg_pruner_tokens = None
+    if pre_args.config is not None:
+        cfg = load_params_from_file(pre_args.config)
+        if not isinstance(cfg, dict):
+            raise Exception(
+                f'Config file {pre_args.config} must be a mapping with '
+                f'input_param / common_param / options sections.')
+        cfg_options = cfg.get('options') or {}
+        defaults, cfg_sampler_tokens, cfg_pruner_tokens = options_to_defaults(cfg_options, parser)
+        parser.set_defaults(**defaults)
 
     args = parser.parse_args()
 
     elo_objective = args.elo_objective
+
+    # Engine and opening file are required, from either the CLI or the config.
+    if args.engine is None:
+        raise Exception('Define the engine via --engine or the config "options.engine".')
+    if args.opening_file is None:
+        raise Exception(
+            'Define the opening file via --opening-file or the config "options.opening_file".')
 
     # Check if engine file exists.
     eng_path = Path(args.engine)
@@ -1132,7 +1220,8 @@ def main():
 
     # Common param can come from --common-param (inline) or --common-param-file.
     common_param = resolve_param(args.common_param, args.common_param_file,
-                                 required=False, name='common-param')
+                                 required=False, name='common-param',
+                                 config_value=cfg.get('common_param'))
 
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
@@ -1151,7 +1240,8 @@ def main():
 
     # Input param can come from --input-param (inline) or --input-param-file.
     input_param = resolve_param(args.input_param, args.input_param_file,
-                                required=True, name='input-param')
+                                required=True, name='input-param',
+                                config_value=cfg.get('input_param'))
     input_param = OrderedDict(sorted(input_param.items()))
 
     logger.info(f'input param: {input_param}\n')
@@ -1167,14 +1257,17 @@ def main():
     n_trials = save_plots_every_trial
     cycle = 0
 
-    # Define sampler to use, default is TPE.
-    sampler, n_startup_trials = Objective.get_sampler(args.sampler)
+    # Define sampler to use, default is TPE. CLI --sampler wins; otherwise fall
+    # back to the config options.sampler mapping (already tokenized).
+    sampler_arg = args.sampler if args.sampler is not None else cfg_sampler_tokens
+    sampler, n_startup_trials = Objective.get_sampler(sampler_arg)
 
     # ThresholdPruner as trial pruner, if result of a match is below result
     # threshold after games threshold then prune the trial. Get new param
     # from optimizer and continue with the next trial.
     # --threshold-pruner result=0.45 games=50 --games-per-trial 100 ...
-    pruner, th_pruner = Objective.get_pruner(args.threshold_pruner, games_per_trial, elo_objective)
+    pruner_arg = args.threshold_pruner if args.threshold_pruner is not None else cfg_pruner_tokens
+    pruner, th_pruner = Objective.get_pruner(pruner_arg, games_per_trial, elo_objective)
 
     logger.info('Starting optimization ...')
 
