@@ -15,7 +15,10 @@ __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
 import sys
+import os
 import time
+import random
+import tempfile
 from subprocess import Popen, PIPE
 import copy
 from collections import OrderedDict
@@ -171,6 +174,9 @@ class Objective(object):
         self.concurrency = concurrency
         self.opening_file = opening_file
         self.opening_format = opening_format
+        # Cache of opening lines (epd/fen), loaded lazily for the pruner's
+        # per-trial unique-opening sampling; stays None until first needed.
+        self._opening_pool = None
         self.pgnout = pgnout
         self.nodes = nodes
 
@@ -258,7 +264,7 @@ class Objective(object):
 
         return new_param
 
-    def get_match_commands(self, test_options, base_options, games):
+    def get_match_commands(self, test_options, base_options, games, opening_file_override=None):
         # cutechess-cli and fastchess share most of the command syntax; duel.py
         # is the remaining branch. fastchess is handled as a cutechess-style CLI
         # with a few flag differences (see notes below).
@@ -339,7 +345,12 @@ class Objective(object):
                 command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
 
         if cutechess_style:
-            command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
+            if opening_file_override:
+                # Pruner mode: play this batch's pre-sampled, trial-unique slice
+                # in file order so openings never repeat within a trial.
+                command += f' -openings file="{opening_file_override}" order=sequential format={self.opening_format}'
+            else:
+                command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
         else:
             command += f' -openings file={self.opening_file} posperfile={self.opening_posperfile}'
 
@@ -368,12 +379,12 @@ class Objective(object):
 
         return tour_manager, command
 
-    def engine_match(self, test_options, base_options, games=50) -> float:
+    def engine_match(self, test_options, base_options, games=50, opening_file_override=None) -> float:
         result = ''
         wins, losses, draws = 0, 0, 0
 
         tour_manager, command = self.get_match_commands(
-            test_options, base_options, games)
+            test_options, base_options, games, opening_file_override)
 
         # Execute the command line to start the match.
         full_command = str(tour_manager) + command
@@ -394,6 +405,53 @@ class Objective(object):
             raise Exception('Error, there is something wrong with the engine match.')
 
         return result, wins, losses, draws, games
+
+    def sample_trial_openings(self):
+        """
+        Draw a list of unique openings for the current trial at random from the
+        whole opening file. The pruner hands each batch a disjoint slice of this
+        list, so no opening repeats within a trial (duplicates across trials are
+        fine). Returns None to fall back to the match manager's own
+        randomization for non line-based books (e.g. pgn) or when the file has
+        too few positions to fill a trial without repeats.
+        """
+        if self.opening_format != 'epd':
+            return None
+
+        if self._opening_pool is None:
+            try:
+                with open(self.opening_file) as f:
+                    self._opening_pool = [ln.strip() for ln in f if ln.strip()]
+            except OSError as e:
+                logger.warning(f'unique-opening sampling disabled, cannot read '
+                               f'opening file "{self.opening_file}": {e}')
+                self._opening_pool = []
+
+        # The pruner's first batch plays `games` outright (only later batches are
+        # clamped to games_per_trial), so a trial can consume up to
+        # max(games_per_trial, games) games, i.e. that many // 2 openings.
+        batch_games = self.threshold_pruner.get('games', 0)
+        need = max(self.games_per_trial, batch_games) // 2
+        if len(self._opening_pool) < need:
+            logger.warning(
+                f'opening file has {len(self._opening_pool)} positions but the '
+                f'trial needs {need} unique openings; falling back to random '
+                f'openings (they may repeat within the trial).')
+            return None
+
+        return random.sample(self._opening_pool, need)
+
+    def write_batch_openings(self, openings, trial_number):
+        """
+        Write a batch's opening slice to a temp file (cutechess/fastchess read it
+        with order=sequential) and return its path. The caller removes the file
+        once the match is done.
+        """
+        fd, path = tempfile.mkstemp(
+            prefix=f'ogpt_trial{trial_number}_b', suffix=f'.{self.opening_format}')
+        with os.fdopen(fd, 'w') as f:
+            f.write('\n'.join(openings) + '\n')
+        return path
 
     @staticmethod
     def result_mean(data: List[float]) -> float:
@@ -613,9 +671,32 @@ class Objective(object):
             games_to_play = self.threshold_pruner['games']
             result, played_games, final_result = 0.0, 0, []
 
+            # Pre-sample this trial's openings so the pruner's batches (each a
+            # separate match process) never reuse the same opening within the
+            # trial. cutechess/fastchess + line-based (epd/fen) books only;
+            # otherwise trial_openings is None and behaviour is unchanged.
+            cutechess_style = self.match_manager in ('cutechess', 'fastchess')
+            trial_openings = self.sample_trial_openings() if cutechess_style else None
+            opening_cursor = 0
+
             while True:
                 logger.info(f'games_to_play: {games_to_play} ...')
-                cur_result, pwins, plosses, pdraws, pgames = self.engine_match(test_options, base_options, games_to_play)
+
+                # Give this batch its own disjoint slice of the trial's openings.
+                batch_opening_file = None
+                if trial_openings is not None:
+                    n = games_to_play // 2
+                    chunk = trial_openings[opening_cursor:opening_cursor + n]
+                    opening_cursor += n
+                    batch_opening_file = self.write_batch_openings(chunk, trial.number)
+
+                try:
+                    cur_result, pwins, plosses, pdraws, pgames = self.engine_match(
+                        test_options, base_options, games_to_play, batch_opening_file)
+                finally:
+                    if batch_opening_file is not None and os.path.exists(batch_opening_file):
+                        os.remove(batch_opening_file)
+
                 wins += pwins; losses += plosses; draws += pdraws; games += pgames
 
                 # Elo for partial games.
