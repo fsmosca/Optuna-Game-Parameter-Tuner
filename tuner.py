@@ -525,13 +525,58 @@ class Objective(object):
         raise
 
     @staticmethod
-    def get_pruner(args_threshold_pruner, games_per_trial, elo_objective=False):
+    def get_pruner(args_threshold_pruner, args_hyperband_pruner, games_per_trial, elo_objective=False):
+        # Returns (optuna pruner object for create_study, th_pruner cadence dict).
+        # th_pruner drives the batched match loop in __call__; its 'games'/
+        # 'interval' set the report cadence for whichever pruner is active.
         pruner, th_pruner = None, {}
-        if args_threshold_pruner is not None:
+
+        def _even(n):
+            n = int(n)
+            return n if n % 2 == 0 else n + 1
+
+        if args_hyperband_pruner is not None:
+            # Hyperband meta-pruner. The loop reports the running result at
+            # step=played_games, so the resource unit is "games played": it plays
+            # `games` (=min_resource by default) per batch, reports each time, and
+            # Hyperband prunes weak trials at its rungs.
+            min_resource = _even(max(2, games_per_trial // 4))
+            max_resource = games_per_trial
+            reduction_factor = 3
+            bootstrap_count = 0
+            interval = 1
+
+            for opt in args_hyperband_pruner:
+                for value in opt:
+                    if 'min_resource=' in value:
+                        min_resource = _even(value.split('=')[1])
+                    elif 'max_resource=' in value:
+                        max_resource = int(value.split('=')[1])
+                    elif 'reduction_factor=' in value:
+                        reduction_factor = int(value.split('=')[1])
+                    elif 'bootstrap_count=' in value:
+                        bootstrap_count = int(value.split('=')[1])
+                    elif 'interval=' in value:
+                        interval = int(value.split('=')[1])
+
+            th_pruner.update({'name': 'hyperband', 'games': min_resource, 'interval': interval})
+
+            logger.info(f'pruner name: hyperband,'
+                        f' min_resource: {min_resource},'
+                        f' max_resource: {max_resource},'
+                        f' reduction_factor: {reduction_factor},'
+                        f' bootstrap_count: {bootstrap_count},'
+                        f' interval: {interval}\n')
+
+            pruner = optuna.pruners.HyperbandPruner(
+                min_resource=min_resource, max_resource=max_resource,
+                reduction_factor=reduction_factor, bootstrap_count=bootstrap_count)
+
+        elif args_threshold_pruner is not None:
 
             # Default if there is threshold pruner.
             result_threshold = -10.0 if elo_objective else 0.25
-            th_pruner.update({'result': result_threshold, 'games': games_per_trial // 2, 'interval': 1})
+            th_pruner.update({'name': 'threshold', 'result': result_threshold, 'games': games_per_trial // 2, 'interval': 1})
 
             for opt in args_threshold_pruner:
                 for value in opt:
@@ -1034,7 +1079,7 @@ def options_to_defaults(cfg_options, parser):
     Translate the 'options' section of a --config file into argparse defaults.
 
     Returns (defaults, sampler_tokens, pruner_tokens). 'defaults' is a dict for
-    parser.set_defaults(); sampler/threshold_pruner are returned separately
+    parser.set_defaults(); sampler/threshold_pruner/hyperband_pruner are returned separately
     because they use a list-of-lists token structure rather than a plain value.
     Keys are normalized ('-' -> '_') and validated against the known flags so
     typos are caught early.
@@ -1045,6 +1090,7 @@ def options_to_defaults(cfg_options, parser):
     defaults = {}
     sampler_tokens = None
     pruner_tokens = None
+    hyperband_tokens = None
 
     for raw_key, value in cfg_options.items():
         key = raw_key.replace('-', '_')
@@ -1056,10 +1102,12 @@ def options_to_defaults(cfg_options, parser):
             sampler_tokens = mapping_to_cli_tokens(value) if isinstance(value, dict) else value
         elif key == 'threshold_pruner':
             pruner_tokens = mapping_to_cli_tokens(value) if isinstance(value, dict) else value
+        elif key == 'hyperband_pruner':
+            hyperband_tokens = mapping_to_cli_tokens(value) if isinstance(value, dict) else value
         else:
             defaults[key] = value
 
-    return defaults, sampler_tokens, pruner_tokens
+    return defaults, sampler_tokens, pruner_tokens, hyperband_tokens
 
 
 def main():
@@ -1204,6 +1252,18 @@ def main():
                              'That would mean after 50 partial games, when result is below -10 Elo\n'
                              'then the trial is pruned, the other 50 games will not be played.',
                         default=None)
+    parser.add_argument('--hyperband-pruner', required=False, nargs='*', action='append',
+                        metavar=('min_resource=', 'reduction_factor='),
+                        help='A Hyperband trial pruner that early-stops unpromising trials.\n'
+                             'Mutually exclusive with --threshold-pruner. The resource unit is\n'
+                             'games played: the match is reported every min_resource games and\n'
+                             'Hyperband prunes weak trials at its rungs. Example:\n'
+                             'tuner.py --games-per-trial 1000 --hyperband-pruner min_resource=50 reduction_factor=3 ...\n'
+                             'Options: min_resource, max_resource, reduction_factor, bootstrap_count, interval.\n'
+                             'Default values: min_resource=games_per_trial/4 (even), max_resource=games_per_trial,\n'
+                             'reduction_factor=3, bootstrap_count=0, interval=1.\n'
+                             'Ref: https://optuna.readthedocs.io/en/stable/reference/generated/optuna.pruners.HyperbandPruner.html',
+                        default=None)
     parser.add_argument('--input-param', required=False, type=str,
                         help='The parameters that will be optimized. Define this OR\n'
                              '--input-param-file (one is required).\n'
@@ -1248,6 +1308,7 @@ def main():
     cfg = {}
     cfg_sampler_tokens = None
     cfg_pruner_tokens = None
+    cfg_hyperband_tokens = None
     if pre_args.config is not None:
         cfg = load_params_from_file(pre_args.config)
         if not isinstance(cfg, dict):
@@ -1255,7 +1316,7 @@ def main():
                 f'Config file {pre_args.config} must be a mapping with '
                 f'input_param / common_param / options sections.')
         cfg_options = cfg.get('options') or {}
-        defaults, cfg_sampler_tokens, cfg_pruner_tokens = options_to_defaults(cfg_options, parser)
+        defaults, cfg_sampler_tokens, cfg_pruner_tokens, cfg_hyperband_tokens = options_to_defaults(cfg_options, parser)
         parser.set_defaults(**defaults)
 
     args = parser.parse_args()
@@ -1368,8 +1429,12 @@ def main():
     # threshold after games threshold then prune the trial. Get new param
     # from optimizer and continue with the next trial.
     # --threshold-pruner result=0.45 games=50 --games-per-trial 100 ...
-    pruner_arg = args.threshold_pruner if args.threshold_pruner is not None else cfg_pruner_tokens
-    pruner, th_pruner = Objective.get_pruner(pruner_arg, games_per_trial, elo_objective)
+    threshold_arg = args.threshold_pruner if args.threshold_pruner is not None else cfg_pruner_tokens
+    hyperband_arg = args.hyperband_pruner if args.hyperband_pruner is not None else cfg_hyperband_tokens
+    if threshold_arg is not None and hyperband_arg is not None:
+        raise SystemExit('Define only one pruner: --threshold-pruner or --hyperband-pruner '
+                         '(or config options.threshold_pruner / options.hyperband_pruner), not both.')
+    pruner, th_pruner = Objective.get_pruner(threshold_arg, hyperband_arg, games_per_trial, elo_objective)
 
     logger.info('Starting optimization ...')
 
