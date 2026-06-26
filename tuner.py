@@ -931,8 +931,16 @@ def save_plots(study, study_name, input_param, is_plot=False):
                  f'{pre_name}_contour.png', figsize=(max(8, 3.4 * n), max(7, 3.4 * n)))
         try_plot(lambda: plot_parallel_coordinate(study, params=params),
                  f'{pre_name}_parallel.png', figsize=(max(9, 2.6 * n), 6))
-        try_plot(lambda: plot_param_importances(study),
-                 f'{pre_name}_importance.png')
+        def plot_importances_5dp():
+            # optuna labels each importance bar to 2 decimals (and "<0.01" for
+            # tiny values). Each label is drawn at an x position equal to the
+            # true importance value, so rewrite the text to 5 decimal places
+            # without recomputing importances.
+            ax = plot_param_importances(study)
+            for text in ax.texts:
+                text.set_text(f'{text.get_position()[0]:.5f}')
+
+        try_plot(plot_importances_5dp, f'{pre_name}_importance.png')
 
     logger.info('Done saving plots.\n')
 
