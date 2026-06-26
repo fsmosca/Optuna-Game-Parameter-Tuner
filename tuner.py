@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v7.1.0'
+__version__ = 'v7.2.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -885,6 +885,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     import matplotlib
     matplotlib.use('Agg')  # render to a file, no display/browser needed
     import matplotlib.pyplot as plt
+    from matplotlib.contour import ContourSet
     from optuna.visualization.matplotlib import (
         plot_optimization_history, plot_slice, plot_contour,
         plot_parallel_coordinate, plot_param_importances)
@@ -898,25 +899,69 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     n = len(params)
 
-    def save_current(filename, figsize=None):
+    def save_current(filename, figsize=None, tight=True):
         fig = plt.gcf()
         # Long parameter names overlap on the default canvas, so grow the
         # figure with the number of parameters.
         if figsize is not None:
             fig.set_size_inches(*figsize)
-        fig.savefig(filename, dpi=100, bbox_inches='tight', facecolor=bg)
+        if tight:
+            fig.savefig(filename, dpi=100, bbox_inches='tight', facecolor=bg)
+        else:
+            fig.savefig(filename, dpi=100, facecolor=bg)
         plt.close(fig)
 
-    def try_plot(make_plot, filename, figsize=None):
+    def try_plot(make_plot, filename, figsize=None, tight=True):
         # Plotting is best-effort: a degenerate study (too few trials, or zero
         # variance in objective values -> optuna's fANOVA raises RuntimeError)
         # must never crash an optimization run that already finished.
         try:
             make_plot()
-            save_current(filename, figsize)
+            save_current(filename, figsize, tight=tight)
         except Exception as err:
             logger.warning(f'Skipped plot "{filename}": {err}')
             plt.close('all')
+
+    def find_colorbar_mappable(panels):
+        # Prefer the filled contour set (contour plot); fall back to the
+        # indexed scatter (slice plot). This skips the black line contour, the
+        # grey infeasible scatter and other non-mappable artists, so the
+        # colorbar always shares the contour's Blues cmap instead of falling
+        # back to the default viridis.
+        for ax in panels:
+            for coll in ax.collections:
+                if isinstance(coll, ContourSet) and getattr(coll, 'filled', False):
+                    return coll
+        for ax in panels:
+            for coll in ax.collections:
+                try:
+                    if coll.get_array() is not None:
+                        return coll
+                except Exception:
+                    continue
+        return None
+
+    def attach_fixed_colorbar(axs, figsize, label):
+        # optuna adds the colorbar via `fig.colorbar(mappable, ax=all_axes)`,
+        # which steals space from every panel; combined with bbox_inches='tight'
+        # this inflates the right margin and the colorbar width as the panel
+        # count grows. Replace it with a fixed-position strip and lay the grid
+        # out into a rect that reserves room for it, so the layout stays stable.
+        # Used by the contour and slice plots (both build a multi-panel grid).
+        panels = axs.ravel() if hasattr(axs, 'ravel') else [axs]
+        fig = panels[0].figure
+        fig.set_size_inches(*figsize)
+        # Drop optuna's auto colorbar (the last axes it appended).
+        if len(fig.axes) > len(panels):
+            fig.axes[-1].remove()
+        # Pack the grid into the left/center, reserving a right strip for the
+        # colorbar and a top strip for the suptitle.
+        fig.tight_layout(rect=[0, 0.005, 0.91, 0.965])
+        mappable = find_colorbar_mappable(panels)
+        if mappable is not None:
+            cax = fig.add_axes([0.92, 0.15, 0.018, 0.7])
+            cb = fig.colorbar(mappable, cax=cax)
+            cb.set_label(label)
 
     with warnings.catch_warnings():
         # Plotting is best-effort; silence its warnings (e.g. optuna's
@@ -925,12 +970,40 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
         try_plot(lambda: plot_optimization_history(study),
                  f'{pre_name}_hist.png')
-        try_plot(lambda: plot_slice(study, params=params),
-                 f'{pre_name}_slice.png', figsize=(max(9, 3.0 * n), 5))
-        try_plot(lambda: plot_contour(study, params=params),
-                 f'{pre_name}_contour.png', figsize=(max(8, 3.4 * n), max(7, 3.4 * n)))
+        slice_panel_width_inches = 5.0
+        slice_height_inches = 6.0
+
+        def plot_slice_fixed():
+            axs = plot_slice(study, params=params)
+            # Same multi-panel colorbar issue as the contour plot (optuna's
+            # `fig.colorbar(sc, ax=axs)` steals from every panel). Rebuild it
+            # on a fixed strip and keep each panel a readable width. The slice
+            # colorbar encodes the trial number, hence the 'Trial' label.
+            if hasattr(axs, 'ravel'):
+                attach_fixed_colorbar(
+                    axs,
+                    (slice_panel_width_inches * n, slice_height_inches),
+                    'Trial')
+
+        try_plot(plot_slice_fixed,
+                 f'{pre_name}_slice.png', tight=False)
+        contour_cell_inches = 5.0
+
+        def plot_contour_fixed():
+            axs = plot_contour(study, params=params)
+            # Only the n>2 case lays out an n*n grid and needs the colorbar
+            # rebuild; n<=2 is a single panel optuna already lays out cleanly.
+            if hasattr(axs, 'ravel'):
+                attach_fixed_colorbar(
+                    axs,
+                    (contour_cell_inches * n, contour_cell_inches * n),
+                    'Objective Value')
+
+        try_plot(plot_contour_fixed,
+                 f'{pre_name}_contour.png', tight=False)
         try_plot(lambda: plot_parallel_coordinate(study, params=params),
-                 f'{pre_name}_parallel.png', figsize=(max(9, 2.6 * n), 6))
+                 f'{pre_name}_parallel.png',
+                 figsize=(max(10, 3.5 * n), 6))
         def plot_importances_5dp():
             # optuna labels each importance bar to 2 decimals (and "<0.01" for
             # tiny values). Each label is drawn at an x position equal to the
@@ -940,7 +1013,10 @@ def save_plots(study, study_name, input_param, is_plot=False):
             for text in ax.texts:
                 text.set_text(f'{text.get_position()[0]:.5f}')
 
-        try_plot(plot_importances_5dp, f'{pre_name}_importance.png')
+        # One horizontal bar per param: grow the height with n so bars stay a
+        # readable thickness instead of thinning out as the param count grows.
+        try_plot(plot_importances_5dp, f'{pre_name}_importance.png',
+                 figsize=(9, max(5.0, 0.6 * n + 2.0)))
 
     logger.info('Done saving plots.\n')
 

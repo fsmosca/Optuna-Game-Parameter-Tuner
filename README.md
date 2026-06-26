@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v7.0.0-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-v7.2.0-orange.svg)](#)
 [![Optuna](https://img.shields.io/badge/powered%20by-Optuna-9cf.svg)](https://github.com/optuna/optuna)
 
 Automatically tune the **evaluation and search parameters** of a game-playing engine
