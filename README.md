@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v7.2.0-orange.svg)](#)
+[![Version](https://img.shields.io/badge/version-v8.0.0-orange.svg)](#)
 [![Optuna](https://img.shields.io/badge/powered%20by-Optuna-9cf.svg)](https://github.com/optuna/optuna)
 
 Automatically tune the **evaluation and search parameters** of a game-playing engine
@@ -110,7 +110,8 @@ A step-by-step Windows guide is available on the
 ## Quickstart
 
 Run a short study tuning a few Stockfish evaluation parameters at fixed depth, using
-the bundled engine, opening book, and cutechess-cli:
+the bundled engine and opening book (matches are played by the built-in pymatch
+manager — no external tool needed):
 
 ```bash
 python tuner.py ^
@@ -127,18 +128,33 @@ python tuner.py ^
 
 ## Match managers
 
-The tuner drives matches through an external **match manager**, selected with
-`--match-manager`:
+Matches are played by a **match manager**, selected with `--match-manager`:
 
 | Manager      | Value       | Engines     | Notes                                          |
 | ------------ | ----------- | ----------- | ---------------------------------------------- |
-| cutechess-cli| `cutechess` | UCI / xboard| Default. Windows `cutechess-cli.exe` bundled.  |
-| fastchess    | `fastchess` | UCI only    | Fast, cutechess-compatible; supports affinity. |
-| duel.py      | `duel`      | xboard      | Bundled pure-Python manager.                   |
+| pymatch      | `pymatch`   | UCI / xboard| Default. Built-in (pymatch.py, runs in-process,|
+|              |             |             | needs the python-chess package). Standard chess only. |
+| cutechess-cli| `cutechess` | UCI / xboard| External. Windows `cutechess-cli.exe` bundled. Use for variants. |
+| fastchess    | `fastchess` | UCI only    | External. Fast, cutechess-compatible; supports affinity. |
+| duel.py      | `duel`      | xboard      | Bundled pure-Python manager (variant-capable). |
 
-### Choosing the executable
+The default `pymatch` manager is part of this repo: it talks to both UCI and
+CECP/xboard engines through the [python-chess](https://pypi.org/project/chess/)
+library, validates every move and game result itself, adjudicates draws/resigns,
+recovers crashed engines, and supports depth/nodes/time-control limits,
+epd/fen/pgn books and concurrency. It can also be run standalone:
 
-By default each manager looks for its binary in `tourney_manager/<manager>/` and then
+```bash
+python pymatch.py --test-engine e1.exe --base-engine e2.exe ^
+  --openings ./start_opening/ogpt_chess_startpos.epd ^
+  --games 8 --depth 4 --concurrency 2 --pgnout out.pgn
+```
+
+For chess variants (e.g. musketeer) use `cutechess` or `duel` instead.
+
+### Choosing the executable (external managers)
+
+Each external manager looks for its binary in `tourney_manager/<manager>/` and then
 on the `PATH`. Override the location with `--match-manager-file`, always **paired** with
 the matching `--match-manager` flavor (the command syntax differs per manager):
 
@@ -326,14 +342,14 @@ Only the most common options are listed; run `python tuner.py -h` for the comple
 
 | Option              | Default | Description                                      |
 | ------------------- | ------- | ------------------------------------------------ |
-| `--match-manager`   | cutechess | `cutechess`, `fastchess`, or `duel`.           |
-| `--match-manager-file` | –    | Custom path to the match-manager executable.     |
+| `--match-manager`   | pymatch | `pymatch` (built-in), `cutechess`, `fastchess`, or `duel`. |
+| `--match-manager-file` | –    | Custom path to an external match-manager executable. |
 | `--use-affinity`    | off     | fastchess only: bind engine threads to CPU cores.|
 | `--protocol`        | uci     | `uci` or `cecp` (xboard).                         |
 | `--base-time-sec`   | 5       | Base time (s) for time-control matches.          |
 | `--inc-time-sec`    | 0.05    | Increment (s) per move.                           |
 | `--depth`           | –       | Fixed search depth (instead of time control).    |
-| `--nodes`           | –       | Fixed node count (cutechess).                     |
+| `--nodes`           | –       | Fixed node count (pymatch and cutechess).         |
 | `--opening-format`  | auto    | Ignored; auto-detected from the file extension (`.pgn`→pgn, `.epd`/`.fen`→epd). |
 | `--concurrency`     | 1       | Games played in parallel.                         |
 
@@ -417,10 +433,11 @@ Helper utilities for preparing opening books and analyzing results live in
 
 ```text
 tuner.py             Main tuner script
+pymatch.py           Built-in match manager (default; also a standalone CLI)
 requirements.txt     Python dependencies
 engines/             Sample engines (deuterium, musketeer, stockfish-modern)
 start_opening/       Opening books (epd/fen/pgn)
-tourney_manager/     Match managers: cutechess/ (bundled), duel/, fastchess/
+tourney_manager/     External match managers: cutechess/ (bundled), duel/, fastchess/
 examples/            Example .bat command lines
 yaml_files/          Sample unified run config (deuterium_config.yaml)
 tools/               Opening-book and result utilities
@@ -442,6 +459,7 @@ or run `python tuner.py -h`.
 ## Credits
 
 - [Optuna](https://github.com/optuna/optuna) — optimization framework
+- [python-chess](https://github.com/niklasf/python-chess) — rules, protocols and pgn for the built-in pymatch manager
 - [cutechess](https://github.com/cutechess/cutechess) — match manager
 - [fastchess](https://github.com/Disservin/fastchess) — match manager
 - [scikit-learn](https://scikit-learn.org/stable/) — parameter importance

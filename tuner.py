@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v7.3.0'
+__version__ = 'v8.0.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -175,7 +175,7 @@ class Objective(object):
                  nodes: Union[None, int]=None, base_time_sec=5,
                  inc_time_sec=0.05,
                  concurrency=1, proto='uci',
-                 match_manager='cutechess', match_manager_file=None,
+                 match_manager='pymatch', match_manager_file=None,
                  depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
@@ -219,7 +219,7 @@ class Objective(object):
         self.startup_trials = n_startup_trials
         self.threshold_pruner = copy.deepcopy(threshold_pruner)
 
-        if self.match_manager == 'cutechess' and self.proto == 'cecp':
+        if self.match_manager in ('pymatch', 'cutechess') and self.proto == 'cecp':
             self.proto = 'xboard'
 
         # fastchess only speaks UCI.
@@ -412,10 +412,62 @@ class Objective(object):
 
         return cmd
 
-    def engine_match(self, test_options, base_options, games=50, opening_file_override=None) -> Tuple[float, int, int, int, int]:
+    def engine_match(self, test_params, base_params, games=50, opening_override=None) -> Tuple[float, int, int, int, int]:
+        """
+        Play a match of `games` games and return (rate, wins, losses, draws,
+        games) from the test engine's POV. test_params/base_params are the
+        full engine option dicts (tuned/init params merged with common param).
+        opening_override carries a pruner batch: a fen/epd line list for the
+        built-in pymatch manager, or a temp file path for the external ones.
+        """
+        requested_games = games
+
+        if self.match_manager == 'pymatch':
+            result, wins, losses, draws, games = self._pymatch_match(
+                test_params, base_params, games, opening_override)
+        else:
+            result, wins, losses, draws, games = self._external_match(
+                option_tokens(test_params), option_tokens(base_params),
+                games, opening_override)
+
+        # e.g. the match manager died mid-match; don't accept a partial score silently.
+        if games != requested_games:
+            logger.warning(f'engine match played {games} of the requested '
+                           f'{requested_games} games; using the partial result.')
+
+        return result, wins, losses, draws, games
+
+    def _pymatch_match(self, test_params, base_params, games, openings):
+        # Only the built-in manager needs the python-chess dependency,
+        # so it is imported here rather than at module level.
+        import pymatch
+
+        adjudication = pymatch.Adjudication(
+            draw_movenumber=int(self.draw_movenumber) if self.draw_movenumber is not None else None,
+            draw_movecount=int(self.draw_movecount),
+            draw_score=int(self.draw_score),
+            resign_movecount=int(self.resign_movecount) if self.resign_movecount is not None else None,
+            resign_score=int(self.resign_score) if self.resign_score is not None else None)
+
+        cfg = pymatch.MatchConfig(
+            test=pymatch.EngineConfig(cmd=self.e1, name=self.test_name,
+                                      proto=self.proto, options=test_params),
+            base=pymatch.EngineConfig(cmd=self.e2, name=self.base_name,
+                                      proto=self.proto, options=base_params),
+            games=games,
+            base_time_sec=self.base_time_sec, inc_time_sec=self.inc_time_sec,
+            depth=self.depth, nodes=self.nodes,
+            opening_file=self.opening_file, opening_format=self.opening_format,
+            opening_order='random', openings=openings,
+            adjudication=adjudication, pgnout=self.pgnout,
+            concurrency=self.concurrency, event=__script_name__)
+
+        res = pymatch.run_match(cfg)
+        return res.rate, res.wins, res.losses, res.draws, res.games
+
+    def _external_match(self, test_options, base_options, games, opening_file_override):
         result = ''
         wins, losses, draws = 0, 0, 0
-        requested_games = games
 
         command = self.get_match_commands(
             test_options, base_options, games, opening_file_override)
@@ -439,11 +491,6 @@ class Objective(object):
 
         if result == '':
             raise Exception('Error, there is something wrong with the engine match.')
-
-        # e.g. the match manager died mid-match; don't accept a partial score silently.
-        if games != requested_games:
-            logger.warning(f'engine match played {games} of the requested '
-                           f'{requested_games} games; using the partial result.')
 
         return result, wins, losses, draws, games
 
@@ -652,14 +699,14 @@ class Objective(object):
                 logger.warning(f'Just return previous value of {value}')
                 return value
 
-        # Engine options as argv tokens. Common param goes to both engines and
+        # Full engine option dicts. Common param goes to both engines and
         # should not be included in the test param (overlap is rejected at
         # startup). The base engine plays the init param.
-        test_options = option_tokens(self.test_param)
-        base_options = option_tokens(self.init_param)
+        test_params = dict(self.test_param)
+        base_params = dict(self.init_param)
         if self.common_param is not None:
-            test_options += option_tokens(self.common_param)
-            base_options += option_tokens(self.common_param)
+            test_params.update(self.common_param)
+            base_params.update(self.common_param)
 
         # Log info to console.
         logger.info(f'suggested param for test engine: {self.test_param}')
@@ -693,30 +740,35 @@ class Objective(object):
             result, played_games = 0.0, 0
 
             # Pre-sample this trial's openings so the pruner's batches (each a
-            # separate match process) never reuse the same opening within the
-            # trial. cutechess/fastchess + line-based (epd/fen) books only;
-            # otherwise trial_openings is None and behaviour is unchanged.
-            cutechess_style = self.match_manager in ('cutechess', 'fastchess')
-            trial_openings = self.sample_trial_openings() if cutechess_style else None
+            # separate match) never reuse the same opening within the trial.
+            # Works with the managers that accept a custom opening set:
+            # pymatch (direct list) and cutechess/fastchess (temp file played
+            # sequentially); line-based (epd/fen) books only. Otherwise
+            # trial_openings is None and behaviour is unchanged.
+            supports_override = self.match_manager in ('pymatch', 'cutechess', 'fastchess')
+            trial_openings = self.sample_trial_openings() if supports_override else None
             opening_cursor = 0
 
             while True:
                 logger.info(f'games_to_play: {games_to_play} ...')
 
                 # Give this batch its own disjoint slice of the trial's openings.
-                batch_opening_file = None
+                batch_opening = None
                 if trial_openings is not None:
                     n = games_to_play // 2
                     chunk = trial_openings[opening_cursor:opening_cursor + n]
                     opening_cursor += n
-                    batch_opening_file = self.write_batch_openings(chunk, trial.number)
+                    if self.match_manager == 'pymatch':
+                        batch_opening = chunk
+                    else:
+                        batch_opening = self.write_batch_openings(chunk, trial.number)
 
                 try:
                     cur_result, pwins, plosses, pdraws, pgames = self.engine_match(
-                        test_options, base_options, games_to_play, batch_opening_file)
+                        test_params, base_params, games_to_play, batch_opening)
                 finally:
-                    if batch_opening_file is not None and os.path.exists(batch_opening_file):
-                        os.remove(batch_opening_file)
+                    if isinstance(batch_opening, str) and os.path.exists(batch_opening):
+                        os.remove(batch_opening)
 
                 wins += pwins; losses += plosses; draws += pdraws; games += pgames
                 played_games += games_to_play
@@ -752,7 +804,7 @@ class Objective(object):
                 )
         # Else if there is no trial pruner just proceed with normal game test at full games per trial.
         else:
-            result, wins, losses, draws, games = self.engine_match(test_options, base_options, self.games_per_trial)
+            result, wins, losses, draws, games = self.engine_match(test_params, base_params, self.games_per_trial)
 
         result = round(result, 5)
 
@@ -1195,7 +1247,8 @@ def main():
                         help='The maximum depth that the engine is allowed to search.')
     parser.add_argument('--nodes', required=False, type=int,
                         help='The maximum nodes that the engine is allowed to search.\n'
-                             'This is only applicable to cutechess match manager.')
+                             'Supported by the pymatch and cutechess match managers\n'
+                             '(pymatch with cecp engines needs the engine to have "feature nps").')
     parser.add_argument('--opening-file', required=False, type=str,
                         help='Start opening filename in pgn, fen or epd format.\n'
                              'The format is auto-detected from the extension\n'
@@ -1231,8 +1284,10 @@ def main():
                         help='Save plots every n trials, default=10.',
                         default=10)
     parser.add_argument('--match-manager', required=False, type=str,
-                        help='The application that handles the engine match,\n'
-                             'can be cutechess, fastchess or duel, default=cutechess.\n'
+                        help='The application that handles the engine match, can be\n'
+                             'pymatch, cutechess, fastchess or duel, default=pymatch.\n'
+                             'pymatch is built-in (uci and cecp engines, standard chess\n'
+                             'only, needs the python-chess package).\n'
                              'Note: fastchess is UCI-only (no xboard/cecp engines).',
                         default=None)
     parser.add_argument('--match-manager-file', required=False, type=str,
@@ -1369,7 +1424,7 @@ def main():
 
     # Resolve and validate the match manager.
     # --match-manager defaults to None so we can tell "explicitly set" from "omitted".
-    valid_managers = ('cutechess', 'fastchess', 'duel')
+    valid_managers = ('pymatch', 'cutechess', 'fastchess', 'duel')
     if args.match_manager is None:
         if args.match_manager_file is not None:
             # A path was given but the flavor was not; the command syntax differs
@@ -1377,11 +1432,29 @@ def main():
             raise Exception(
                 '--match-manager-file was given without --match-manager. Please also '
                 'specify the flavor, e.g. --match-manager fastchess (or cutechess).')
-        args.match_manager = 'cutechess'
+        args.match_manager = 'pymatch'
     if args.match_manager not in valid_managers:
         raise Exception(
             f'Unknown --match-manager "{args.match_manager}", '
             f'expected one of {", ".join(valid_managers)}.')
+
+    # The built-in pymatch manager: in-process, standard chess only, needs
+    # the python-chess package.
+    if args.match_manager == 'pymatch':
+        if args.match_manager_file is not None:
+            raise Exception(
+                '--match-manager-file does not apply to the built-in pymatch manager.')
+        if args.variant != 'normal':
+            raise Exception(
+                'The built-in pymatch manager supports standard chess only; '
+                'use --match-manager cutechess for variants.')
+        try:
+            import chess  # noqa: F401
+        except ModuleNotFoundError:
+            raise Exception(
+                'The default pymatch match manager needs the python-chess package. '
+                'Install it with "pip install chess" (see requirements.txt), or '
+                'choose --match-manager cutechess.')
 
     # fastchess is UCI-only; it cannot run xboard/cecp engines.
     if args.match_manager == 'fastchess' and args.protocol == 'cecp':

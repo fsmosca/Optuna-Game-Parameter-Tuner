@@ -1,5 +1,6 @@
 optuna==4.9.0
 optuna-dashboard==0.20.0
+chess==1.11.2
 pandas==2.3.3
 matplotlib==3.11.0
 scikit-learn==1.9.0
