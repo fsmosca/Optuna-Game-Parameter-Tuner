@@ -20,11 +20,12 @@ prints cutechess-compatible score lines:
 
 from __future__ import annotations
 
-__version__ = 'v1.0.0'
+__version__ = 'v1.1.0'
 
 import argparse
 import datetime
 import logging
+import os
 import random
 import sys
 import threading
@@ -100,7 +101,8 @@ class MatchConfig:
     concurrency: int = 1
     event: str = 'pymatch'
     move_timeout: float = 300.0        # watchdog ceiling per move, depth/nodes mode
-    time_margin: float = 5.0           # watchdog grace over the clock, tc mode
+    watchdog_margin: float = 5.0       # watchdog grace over the clock, tc mode
+    timemargin: float = 0.1            # clock overshoot tolerated before flagging
     max_restarts: int = 3              # engine crashes tolerated per engine slot
 
 
@@ -345,6 +347,7 @@ def play_game(white_slot, black_slot, start_fen, cfg: MatchConfig,
               chess.BLACK: float(cfg.base_time_sec)}
     inc = float(cfg.inc_time_sec)
     hist = {chess.WHITE: [], chess.BLACK: []}
+    charged = {chess.WHITE: [], chess.BLACK: []}   # per-move seconds, for diagnostics
     game_id = object()                 # fresh token -> engines get a newgame
     result, termination = None, 'normal'
 
@@ -385,7 +388,11 @@ def play_game(white_slot, black_slot, start_fen, cfg: MatchConfig,
                 white_clock=max(0.01, clocks[chess.WHITE]),
                 black_clock=max(0.01, clocks[chess.BLACK]),
                 white_inc=inc, black_inc=inc)
-            allowance = clocks[mover] + cfg.time_margin
+            # The watchdog only exists to catch an engine that will never
+            # answer, so it can afford to be generous. Late in a game the
+            # remaining clock is tiny, and a machine-wide hiccup must not be
+            # allowed to kill a healthy engine.
+            allowance = max(30.0, clocks[mover] + cfg.watchdog_margin)
 
         start = time.perf_counter()
         try:
@@ -393,13 +400,22 @@ def play_game(white_slot, black_slot, start_fen, cfg: MatchConfig,
         except chess.engine.EngineError as err:
             slot.needs_restart = True
             if slot.timed_out:
-                termination = 'time forfeit' if tc_mode else 'stalled'
+                # The watchdog killed an engine that stopped answering. That is
+                # a stall, not a clock flag - keep them apart so "time forfeit"
+                # keeps meaning "ran out of clock".
+                termination = 'stalled'
+                logger.warning(
+                    f'game {round_no}.{game_no}: {slot.config.name} engine stopped '
+                    f'answering for {time.perf_counter() - start:.1f}s (allowance '
+                    f'{allowance:.1f}s), killed and restarted; it loses this game')
             elif isinstance(err, chess.engine.EngineTerminatedError):
                 termination = 'abandoned'
+                logger.warning(f'game {round_no}.{game_no}: {slot.config.name} engine '
+                               f'{termination} ({err})')
             else:
                 termination = 'illegal move'
-            logger.warning(f'game {round_no}.{game_no}: {slot.config.name} engine '
-                           f'{termination} ({err})')
+                logger.warning(f'game {round_no}.{game_no}: {slot.config.name} engine '
+                               f'{termination} ({err})')
             result = mover_loses(mover)
             break
 
@@ -408,8 +424,24 @@ def play_game(white_slot, black_slot, start_fen, cfg: MatchConfig,
             break
 
         if tc_mode:
-            clocks[mover] -= time.perf_counter() - start
-            if clocks[mover] < 0:
+            wall = time.perf_counter() - start
+            engine_time = res.info.get('time')
+            # Charge the engine's own reported search time when it gives one:
+            # the wall clock also contains this manager's protocol overhead,
+            # which is not the engine's to pay for. Fall back to the wall clock
+            # for engines that report no time (some xboard engines).
+            used = wall if engine_time is None else engine_time
+            charged[mover].append(used)
+            clocks[mover] -= used
+            if clocks[mover] < -cfg.timemargin:
+                reported = 'none' if engine_time is None else f'{engine_time:.3f}s'
+                logger.warning(
+                    f'game {round_no}.{game_no}: {slot.config.name} forfeits on time at '
+                    f'move {len(charged[mover])} - charged {used:.3f}s for this move '
+                    f'(engine reported {reported}, wall clock {wall:.3f}s), clock was '
+                    f'{clocks[mover] + used:.3f}s before it; used {sum(charged[mover]):.3f}s '
+                    f'of a {cfg.base_time_sec + inc * (len(charged[mover]) - 1):.3f}s budget; '
+                    f'per-move: {[round(c, 2) for c in charged[mover]]}')
                 result, termination = mover_loses(mover), 'time forfeit'
                 break
             clocks[mover] += inc
@@ -474,6 +506,16 @@ class MatchRunner:
         self._validate()
         fens = self._select_openings()
         workers = max(1, min(self.cfg.concurrency, len(fens)))
+
+        # Pondering is off, so only the engine to move is searching: a game in
+        # progress costs about one cpu, not two. Warn only when the games
+        # themselves outnumber the cpus, since under a time control an engine
+        # budgets by wall clock and a starved search weakens for the same spend.
+        cpus = os.cpu_count() or 1
+        if self.cfg.depth is None and self.cfg.nodes is None and workers > cpus:
+            _warn_once(f'concurrency {workers} runs more games at once than the '
+                       f'{cpus} cpus available; under a time control this distorts '
+                       f'results - consider concurrency {cpus} or fixed depth/nodes.')
 
         executor = ThreadPoolExecutor(max_workers=workers,
                                       thread_name_prefix='pymatch')
@@ -645,6 +687,9 @@ def main(argv=None):
     parser.add_argument('--nodes', type=int, help='fixed nodes per move.')
     parser.add_argument('--base-time-sec', type=float, default=5.0)
     parser.add_argument('--inc-time-sec', type=float, default=0.05)
+    parser.add_argument('--timemargin', type=float, default=0.1,
+                        help='seconds of clock overshoot tolerated before an\n'
+                             'engine is flagged for losing on time, default=0.1.')
     parser.add_argument('--openings', required=True, metavar='FILE',
                         help='opening book: .epd/.fen (one per line) or .pgn.')
     parser.add_argument('--order', default='random', choices=('random', 'sequential'))
@@ -682,7 +727,8 @@ def main(argv=None):
             draw_score=args.draw_score,
             resign_movecount=args.resign_movecount,
             resign_score=args.resign_score),
-        pgnout=args.pgnout, concurrency=args.concurrency, event=args.event)
+        pgnout=args.pgnout, concurrency=args.concurrency, event=args.event,
+        timemargin=args.timemargin)
 
     result = run_match(cfg, echo=True)
     print('Finished match')
