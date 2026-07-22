@@ -10,7 +10,7 @@ futility pruning margin for search."""
 
 __author__ = 'fsmosca'
 __script_name__ = 'Optuna Game Parameter Tuner'
-__version__ = 'v7.2.0'
+__version__ = 'v7.3.0'
 __credits__ = ['joergoster', 'musketeerchess', 'optuna']
 
 
@@ -24,9 +24,9 @@ import copy
 from collections import OrderedDict
 import argparse
 from pathlib import Path
-import shlex
 import ast
-from typing import List, Union
+import re
+from typing import Tuple, Union
 import logging
 import math
 
@@ -70,9 +70,11 @@ class Elo:
         self.losses = loss
         self.draws = draw
         self.n = win + loss + draw
-        self.mu = self.wins/self.n + self.draws/self.n / 2
+        self.mu = (self.wins / self.n + self.draws / self.n / 2) if self.n else 0.0
 
     def stdev(self):
+        if self.n == 0:
+            return 0.0
         n = self.n
         wr = self.wins / n
         lr = self.losses / n
@@ -85,7 +87,7 @@ class Elo:
         return math.sqrt(dev_w + dev_l + dev_d) / math.sqrt(n)
 
     def draw_ratio(self):
-        return self.draws / self.n
+        return self.draws / self.n if self.n else 0.0
 
     def diff(self, p=None):
         """Elo difference"""
@@ -137,16 +139,43 @@ class Elo:
         return 1 / (1 + 10 ** (-rd/400))
 
 
+# Match-manager score line, e.g. "Score of test vs base: 39 - 28 - 64  [0.542] 131".
+SCORE_LINE_RE = re.compile(r': (\d+) - (\d+) - (\d+)\s*\[[0-9.]+\]\s*(\d+)\s*$')
+
+
+def option_tokens(params: dict) -> list:
+    """Engine option argv tokens, e.g. ['option.pawn=92', 'option.knight=300']."""
+    return [f'option.{k}={v}' for k, v in params.items()]
+
+
+def options_str(params: dict) -> str:
+    """Space-joined option_tokens, for logging."""
+    return ' '.join(option_tokens(params))
+
+
+def tokens_to_dict(args_tokens) -> dict:
+    """
+    Flatten CLI tokens like [['name=tpe', 'seed=1']] into {'name': 'tpe',
+    'seed': '1'}. Later tokens win when a key repeats.
+    """
+    d = {}
+    for opt in args_tokens or []:
+        for tok in opt:
+            if '=' in tok:
+                k, _, v = tok.partition('=')
+                d[k] = v
+    return d
+
+
 class Objective(object):
-    def __init__(self, study, engine, input_param, best_param, best_value,
-                 best_value_threshold, init_param, init_value, variant,
+    def __init__(self, study, engine, input_param,
+                 init_param, init_value, variant,
                  opening_file,
                  opening_format, pgnout,
                  nodes: Union[None, int]=None, base_time_sec=5,
-                 inc_time_sec=0.05, rounds=16,
-                 concurrency=1, proto='uci', fix_base_param=True,
+                 inc_time_sec=0.05,
+                 concurrency=1, proto='uci',
                  match_manager='cutechess', match_manager_file=None,
-                 good_result_cnt=0,
                  depth: Union[None, int]=None, games_per_trial=32,
                  threshold_pruner={}, common_param=None,
                  resign_movecount=None, resign_score=None,
@@ -154,14 +183,10 @@ class Objective(object):
                  opening_posperfile=-1, n_startup_trials=1,
                  noisy_result=False, elo_objective=False,
                  use_affinity=None):
-        self.study =study
+        self.study = study
         self.input_param = copy.deepcopy(input_param)
-        self.best_param = copy.deepcopy(best_param)
-        self.best_value = best_value
-        self.best_value_threshold = best_value_threshold
         self.init_param = copy.deepcopy(init_param)
         self.init_value = init_value
-        self.rounds = rounds
 
         self.variant = variant
 
@@ -186,9 +211,6 @@ class Objective(object):
         self.test_param = {}
         self.proto = proto
 
-        self.inc_factor = 1/2
-        self.fix_base_param = fix_base_param
-        self.good_result_cnt = good_result_cnt
         self.match_manager = match_manager
         self.match_manager_file = match_manager_file
         self.depth = depth
@@ -214,40 +236,57 @@ class Objective(object):
         self.draw_movecount = draw_movecount
         self.draw_score = draw_score
         self.opening_posperfile = opening_posperfile
-        self.trial_hist_check = self.save_trial_history()
+        self.trial_hist_check, self.pruned_hist = self.save_trial_history()
         self.noisy_result = noisy_result
         self.elo_objective = elo_objective
         self.value_name = 'Elo' if self.elo_objective else 'rate'
 
     def save_trial_history(self):
-        ret = {}
+        """
+        Rebuild the duplicate-suggestion caches from the study history.
+
+        Returns (values, pruned): completed params mapped to their objective
+        value, and the set of params whose trial was pruned. A pruned trial's
+        value is only a partial-match result, so we remember that the param
+        was pruned rather than the number itself.
+        """
+        values, pruned = {}, set()
         for t in self.study.trials:
             # Don't include interrupted trials.
             if t.state == optuna.trial.TrialState.RUNNING:
                 continue
 
             trial_hist = {}
-
-            value = t.value
             for k, v in t.params.items():
-                trial_hist.update({k: v})
+                # Round floats to 5 dp so the key matches the one built in
+                # __call__ (which rounds suggest_float to 5 dp); otherwise
+                # float noise makes the same suggestion look like two keys.
+                if isinstance(t.distributions.get(k), FloatDistribution):
+                    v = round(v, 5)
+                trial_hist[k] = v
 
             key = self.gen_parval_key(trial_hist)
-            ret.update({key: value})
 
-        return ret
+            if t.state == optuna.trial.TrialState.PRUNED:
+                pruned.add(key)
+            elif t.value is not None:
+                # FAILed trials have no value; caching None here would later
+                # be returned as an objective value.
+                values[key] = t.value
 
-    def read_result(self, line: str) -> float:
+        return values, pruned
+
+    def read_result(self, line: str) -> Tuple[float, int, int, int, int]:
         """
         Read result output line from match manager.
 
         # Score of e1 vs e2: 39 - 28 - 64  [0.542] 131
         wins=39, losses=28, draws=64, games=131
         """
-        num_wins = int(line.split(': ')[1].split(' -')[0])
-        num_losses = int(line.split(': ')[1].split(' -')[1])
-        num_draws = int(line.split(': ')[1].split('-')[2].strip().split()[0])
-        num_games = int(line.split('] ')[1].strip())
+        m = SCORE_LINE_RE.search(line)
+        if m is None:
+            raise ValueError(f'Unexpected score line from match manager: "{line}"')
+        num_wins, num_losses, num_draws, num_games = map(int, m.groups())
         result = (num_wins + num_draws / 2) / num_games
 
         return result, num_wins, num_losses, num_draws, num_games
@@ -258,11 +297,7 @@ class Objective(object):
         Create a dict of default values from input param
         with default, min, max, and step.
         """
-        new_param = {}
-        for k, v in input_param.items():
-            new_param.update({k: v['default']})
-
-        return new_param
+        return {k: v['default'] for k, v in input_param.items()}
 
     def get_match_commands(self, test_options, base_options, games, opening_file_override=None):
         # cutechess-cli and fastchess share most of the command syntax; duel.py
@@ -270,139 +305,145 @@ class Objective(object):
         # with a few flag differences (see notes below).
         cutechess_style = self.match_manager in ('cutechess', 'fastchess')
 
-        # Resolve the match-manager executable.
+        # Resolve the match-manager executable into argv form.
         if self.match_manager == 'cutechess':
             if self.match_manager_file:
-                # User-supplied path wins (e.g. a self-compiled cutechess-cli
-                # on Linux). Quoted in case the path contains spaces.
-                tour_manager = f'"{self.match_manager_file}"'
+                # User-supplied path wins (e.g. a self-compiled cutechess-cli on Linux).
+                cmd = [self.match_manager_file]
             else:
                 exe_name = 'cutechess-cli.exe' if sys.platform == 'win32' else 'cutechess-cli'
                 bundled = Path(Path.cwd(), 'tourney_manager', 'cutechess', exe_name)
                 # The repo ships a Windows cutechess-cli.exe; use it when present.
                 # On Linux fall back to a cutechess-cli found on PATH.
-                tour_manager = bundled if bundled.is_file() else exe_name
+                cmd = [str(bundled) if bundled.is_file() else exe_name]
         elif self.match_manager == 'fastchess':
             if self.match_manager_file:
-                tour_manager = f'"{self.match_manager_file}"'
+                cmd = [self.match_manager_file]
             else:
                 exe_name = 'fastchess.exe' if sys.platform == 'win32' else 'fastchess'
                 bundled = Path(Path.cwd(), 'tourney_manager', 'fastchess', exe_name)
                 # No fastchess binary ships with the repo; use one if the user
                 # dropped it here, otherwise fall back to fastchess on PATH.
-                tour_manager = bundled if bundled.is_file() else exe_name
+                cmd = [str(bundled) if bundled.is_file() else exe_name]
         else:
             # duel.py is a bundled Python script run via the interpreter; the
             # override lets users point at a duel.py in a custom location.
             duel_script = self.match_manager_file or './tourney_manager/duel/duel.py'
-            tour_manager = f'"{sys.executable}" -u "{duel_script}"'
+            cmd = [sys.executable, '-u', duel_script]
 
-        command = f' -concurrency {self.concurrency}'
+        cmd += ['-concurrency', str(self.concurrency)]
 
         if cutechess_style:
             # fastchess treats a bare relative cmd (e.g. engines/sf.exe) as a
-            # PATH lookup and fails, so give it an absolute, quoted engine path.
+            # PATH lookup and fails, so give it an absolute engine path.
             if self.match_manager == 'fastchess':
-                e1 = f'"{Path(self.e1).resolve()}"'
-                e2 = f'"{Path(self.e2).resolve()}"'
+                e1 = str(Path(self.e1).resolve())
+                e2 = str(Path(self.e2).resolve())
             else:
                 e1, e2 = self.e1, self.e2
-            command += f' -engine cmd={e1} name={self.test_name} {test_options} proto={self.proto}'
-            command += f' -engine cmd={e2} name={self.base_name} {base_options} proto={self.proto}'
+            cmd += ['-engine', f'cmd={e1}', f'name={self.test_name}', *test_options, f'proto={self.proto}']
+            cmd += ['-engine', f'cmd={e2}', f'name={self.base_name}', *base_options, f'proto={self.proto}']
             if self.match_manager == 'cutechess':
-                command += ' -wait 100'
+                cmd += ['-wait', '100']
         else:
-            command += f' -engine cmd={self.e1} name={self.test_name} {test_options}'
-            command += f' -engine cmd={self.e2} name={self.base_name} {base_options}'
+            cmd += ['-engine', f'cmd={self.e1}', f'name={self.test_name}', *test_options]
+            cmd += ['-engine', f'cmd={self.e2}', f'name={self.base_name}', *base_options]
 
         if self.variant != 'normal':
-            command += f' -variant {self.variant}'
+            cmd += ['-variant', self.variant]
 
         # fastchess spells round-robin without the hyphen.
-        if self.match_manager == 'fastchess':
-            command += ' -tournament roundrobin'
-        else:
-            command += ' -tournament round-robin'
+        cmd += ['-tournament',
+                'roundrobin' if self.match_manager == 'fastchess' else 'round-robin']
 
         if cutechess_style:
-            command += ' -recover'
-            command += f' -rounds {games//2} -games 2 -repeat 2'
+            cmd += ['-recover', '-rounds', str(games//2), '-games', '2', '-repeat', '2']
 
             # fastchess takes a fixed depth/nodes directly; cutechess needs tc=inf.
-            tc_prefix = '' if self.match_manager == 'fastchess' else 'tc=inf '
+            tc_inf = [] if self.match_manager == 'fastchess' else ['tc=inf']
             if self.depth is not None:
-                command += f' -each {tc_prefix}depth={self.depth}'
+                cmd += ['-each', *tc_inf, f'depth={self.depth}']
             elif self.nodes is not None:
-                command += f' -each {tc_prefix}nodes={self.nodes}'
+                cmd += ['-each', *tc_inf, f'nodes={self.nodes}']
             else:
-                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
+                cmd += ['-each', f'tc=0/0:{self.base_time_sec}+{self.inc_time_sec}']
         # duel.py match manager
         else:
-            command += f' -rounds {games//2} -repeat 2'
+            cmd += ['-rounds', str(games//2), '-repeat', '2']
             if self.depth is not None:
-                command += f' -each tc=inf depth={self.depth}'
+                cmd += ['-each', 'tc=inf', f'depth={self.depth}']
             else:
-                command += f' -each tc=0/0:{self.base_time_sec}+{self.inc_time_sec}'
+                cmd += ['-each', f'tc=0/0:{self.base_time_sec}+{self.inc_time_sec}']
 
         if cutechess_style:
             if opening_file_override:
                 # Pruner mode: play this batch's pre-sampled, trial-unique slice
                 # in file order so openings never repeat within a trial.
-                command += f' -openings file="{opening_file_override}" order=sequential format={self.opening_format}'
+                cmd += ['-openings', f'file={opening_file_override}',
+                        'order=sequential', f'format={self.opening_format}']
             else:
-                command += f' -openings file={self.opening_file} order=random format={self.opening_format}'
+                cmd += ['-openings', f'file={self.opening_file}',
+                        'order=random', f'format={self.opening_format}']
         else:
-            command += f' -openings file={self.opening_file} posperfile={self.opening_posperfile}'
+            cmd += ['-openings', f'file={self.opening_file}',
+                    f'posperfile={self.opening_posperfile}']
 
         # draw adjudication
         if self.draw_movenumber is not None:
-            command += f' -draw movenumber={self.draw_movenumber} movecount={self.draw_movecount} score={self.draw_score}'
+            cmd += ['-draw', f'movenumber={self.draw_movenumber}',
+                    f'movecount={self.draw_movecount}', f'score={self.draw_score}']
 
         if self.resign_movecount is not None and self.resign_score is not None:
-            command += f' -resign movecount={self.resign_movecount} score={self.resign_score}'
+            cmd += ['-resign', f'movecount={self.resign_movecount}', f'score={self.resign_score}']
             if cutechess_style:
-                command += f' twosided=true'
+                cmd.append('twosided=true')
 
         # fastchess uses the file= form and must emit cutechess-compatible output
         # so read_result can parse the score lines.
         if self.match_manager == 'fastchess':
-            command += f' -pgnout file={self.pgnout}'
-            command += ' -output format=cutechess'
+            cmd += ['-pgnout', f'file={self.pgnout}', '-output', 'format=cutechess']
             # Thread affinity: bare flag auto-binds, otherwise a core list/range.
             if self.use_affinity is not None:
-                if self.use_affinity is True:
-                    command += ' -use-affinity'
-                else:
-                    command += f' -use-affinity {self.use_affinity}'
+                cmd.append('-use-affinity')
+                if self.use_affinity is not True:
+                    cmd.append(str(self.use_affinity))
         else:
-            command += f' -pgnout {self.pgnout}'
+            cmd += ['-pgnout', self.pgnout]
 
-        return tour_manager, command
+        return cmd
 
-    def engine_match(self, test_options, base_options, games=50, opening_file_override=None) -> float:
+    def engine_match(self, test_options, base_options, games=50, opening_file_override=None) -> Tuple[float, int, int, int, int]:
         result = ''
         wins, losses, draws = 0, 0, 0
+        requested_games = games
 
-        tour_manager, command = self.get_match_commands(
+        command = self.get_match_commands(
             test_options, base_options, games, opening_file_override)
 
-        # Execute the command line to start the match.
-        full_command = str(tour_manager) + command
-        # On POSIX, Popen treats a string arg as the whole program name and does
-        # not split it into arguments, so tokenize it. On Windows the OS parses
-        # the command string itself, so it is passed through unchanged.
-        if sys.platform != 'win32':
-            full_command = shlex.split(full_command)
-        process = Popen(full_command, stdout=PIPE, text=True)
-        for eline in iter(process.stdout.readline, ''):
-            line = eline.strip()
-            if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
-                result, wins, losses, draws, games = self.read_result(line)
+        # An argv list needs no quoting/tokenizing: Popen passes each element
+        # through as one argument, even if it contains spaces.
+        process = Popen(command, stdout=PIPE, text=True)
+        try:
+            for eline in iter(process.stdout.readline, ''):
+                line = eline.strip()
+                if line.startswith(f'Score of {self.test_name} vs {self.base_name}'):
+                    result, wins, losses, draws, games = self.read_result(line)
                 if 'Finished match' in line:
                     break
+        finally:
+            # Closing stdout lets a still-running child fail its writes (EPIPE)
+            # and exit; wait() reaps it so we never leak or zombie the process.
+            if process.stdout is not None:
+                process.stdout.close()
+            process.wait()
 
         if result == '':
             raise Exception('Error, there is something wrong with the engine match.')
+
+        # e.g. the match manager died mid-match; don't accept a partial score silently.
+        if games != requested_games:
+            logger.warning(f'engine match played {games} of the requested '
+                           f'{requested_games} games; using the partial result.')
 
         return result, wins, losses, draws, games
 
@@ -454,85 +495,60 @@ class Objective(object):
         return path
 
     @staticmethod
-    def result_mean(data: List[float]) -> float:
-        return sum(data)/len(data)
-
-    @staticmethod
     def get_sampler(args_sampler):
-        n_startup_trials = 10
-
         if args_sampler is None:
             logger.warning('Sampler option is not defined, use tpe sampler.')
-            return optuna.samplers.TPESampler(), n_startup_trials
+            return optuna.samplers.TPESampler(), 10
 
-        name = None
-        for opt in args_sampler:
-            for value in opt:
-                if 'name=' in value:
-                    name = value.split('=')[1]
-                    break
+        opts = tokens_to_dict(args_sampler)
+        name = opts.get('name')
 
         if name is None:
             logger.warning('Sampler name is not defined, use tpe sampler.')
-            return optuna.samplers.TPESampler(), n_startup_trials
+            return optuna.samplers.TPESampler(), 10
+
+        seed = int(opts['seed']) if 'seed' in opts else None
 
         # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.TPESampler.html
         if name == 'tpe':
-            n_ei_candidates, multivariate, group, seed, constant_liar = 24, False, False, None, False
-            n_startup_trials = 10
-            for opt in args_sampler:
-                for value in opt:
-                    if 'n_ei_candidates=' in value:
-                        n_ei_candidates = int(value.split('=')[1])
-                    elif 'multivariate=' in value:
-                        multivariate = True if value.split('=')[1].lower() == 'true' else False
-                    elif 'group=' in value:
-                        group = True if value.split('=')[1].lower() == 'true' else False
-                    elif 'seed=' in value:
-                        seed = int(value.split('=')[1])
-                    elif 'constant_liar=' in value:
-                        constant_liar = True if value.split('=')[1].lower() == 'true' else False
-                    elif 'n_startup_trials=' in value:
-                        n_startup_trials = int(value.split('=')[1])
+            n_startup_trials = int(opts.get('n_startup_trials', 10))
+            multivariate = opts.get('multivariate', 'false').lower() == 'true'
+            group = opts.get('group', 'false').lower() == 'true'
 
             # Avoid ValueError when multivariate is false and group is true
             if group and not multivariate:
                 group = False
-                logger.warning(f'group is set to false as multivariate is false!')
+                logger.warning('group is set to false as multivariate is false!')
 
             return optuna.samplers.TPESampler(
-                n_ei_candidates=n_ei_candidates,  multivariate=multivariate,
-                group=group, seed=seed, constant_liar=constant_liar,
+                n_ei_candidates=int(opts.get('n_ei_candidates', 24)),
+                multivariate=multivariate, group=group, seed=seed,
+                constant_liar=opts.get('constant_liar', 'false').lower() == 'true',
                 n_startup_trials=n_startup_trials), n_startup_trials
 
+        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html
         if name == 'cmaes':
-            n_startup_trials, seed = 1, None
-            sigma0 = None  # initial std. deviation
-            for opt in args_sampler:
-                for value in opt:
-                    if 'sigma0=' in value:
-                        sigma0 = float(value.split('=')[1])
-                    elif 'seed=' in value:
-                        seed = int(value.split('=')[1])
-                    elif 'n_startup_trials=' in value:
-                        n_startup_trials = int(value.split('=')[1])
+            n_startup_trials = int(opts.get('n_startup_trials', 1))
+            sigma0 = float(opts['sigma0']) if 'sigma0' in opts else None  # initial std. deviation
 
-            # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.CmaEsSampler.html
             return optuna.samplers.CmaEsSampler(
                 sigma0=sigma0, seed=seed, n_startup_trials=n_startup_trials), n_startup_trials
 
-        logger.exception(f'Error, sampler name "{name}" is not supported, use tpe or cmaes.')
-        raise
+        raise ValueError(f'sampler name "{name}" is not supported, use tpe or cmaes.')
 
     @staticmethod
-    def get_pruner(args_threshold_pruner, args_hyperband_pruner, games_per_trial, elo_objective=False):
+    def get_pruner(args_threshold_pruner, args_hyperband_pruner, games_per_trial,
+                   elo_objective=False, direction='maximize'):
         # Returns (optuna pruner object for create_study, th_pruner cadence dict).
         # th_pruner drives the batched match loop in __call__; its 'games'/
         # 'interval' set the report cadence for whichever pruner is active.
         pruner, th_pruner = None, {}
+        minimize = direction == 'minimize'
 
         def _even(n):
-            n = int(n)
+            # A match batch needs an even game count (each opening is played
+            # with both colors) and at least one 2-game round.
+            n = max(2, int(n))
             return n if n % 2 == 0 else n + 1
 
         if args_hyperband_pruner is not None:
@@ -540,26 +556,14 @@ class Objective(object):
             # step=played_games, so the resource unit is "games played": it plays
             # `games` (=min_resource by default) per batch, reports each time, and
             # Hyperband prunes weak trials at its rungs.
-            min_resource = _even(max(2, games_per_trial // 4))
-            max_resource = games_per_trial
-            reduction_factor = 3
-            bootstrap_count = 0
-            interval = 1
+            opts = tokens_to_dict(args_hyperband_pruner)
+            min_resource = _even(opts.get('min_resource', games_per_trial // 4))
+            max_resource = int(opts.get('max_resource', games_per_trial))
+            reduction_factor = int(opts.get('reduction_factor', 3))
+            bootstrap_count = int(opts.get('bootstrap_count', 0))
+            interval = int(opts.get('interval', 1))
 
-            for opt in args_hyperband_pruner:
-                for value in opt:
-                    if 'min_resource=' in value:
-                        min_resource = _even(value.split('=')[1])
-                    elif 'max_resource=' in value:
-                        max_resource = int(value.split('=')[1])
-                    elif 'reduction_factor=' in value:
-                        reduction_factor = int(value.split('=')[1])
-                    elif 'bootstrap_count=' in value:
-                        bootstrap_count = int(value.split('=')[1])
-                    elif 'interval=' in value:
-                        interval = int(value.split('=')[1])
-
-            th_pruner.update({'name': 'hyperband', 'games': min_resource, 'interval': interval})
+            th_pruner = {'name': 'hyperband', 'games': min_resource, 'interval': interval}
 
             logger.info(f'pruner name: hyperband,'
                         f' min_resource: {min_resource},'
@@ -573,28 +577,37 @@ class Objective(object):
                 reduction_factor=reduction_factor, bootstrap_count=bootstrap_count)
 
         elif args_threshold_pruner is not None:
+            opts = tokens_to_dict(args_threshold_pruner)
 
-            # Default if there is threshold pruner.
-            result_threshold = -10.0 if elo_objective else 0.25
-            th_pruner.update({'name': 'threshold', 'result': result_threshold, 'games': games_per_trial // 2, 'interval': 1})
+            # Unlike hyperband, the threshold pruner has a fixed bound and no
+            # notion of direction, so the bound has to match the search.
+            # Maximizing (stronger params) prunes results below the threshold;
+            # minimizing (deliberately weaker params) prunes results above it.
+            # The defaults mirror each other around a tied match (0.5 / 0 Elo).
+            if elo_objective:
+                default_result = 10.0 if minimize else -10.0
+            else:
+                default_result = 0.75 if minimize else 0.25
 
-            for opt in args_threshold_pruner:
-                for value in opt:
-                    if 'result=' in value:
-                        th_pruner.update({value.split('=')[0]: float(value.split('=')[1])})
-                    elif 'games=' in value:
-                        th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
-                    elif 'interval=' in value:
-                        th_pruner.update({value.split('=')[0]: int(value.split('=')[1])})
+            th_pruner = {
+                'name': 'threshold',
+                # Default result threshold is in the objective's unit.
+                'result': float(opts.get('result', default_result)),
+                'games': _even(opts.get('games', games_per_trial // 2)),
+                'interval': int(opts.get('interval', 1)),
+            }
 
             logger.info(f'pruner name: threshold_pruner,'
-                        f' result: {th_pruner["result"]},'
+                        f' prune when result is'
+                        f' {"above" if minimize else "below"} {th_pruner["result"]},'
                         f' games: {th_pruner["games"]},'
                         f' interval: {th_pruner["interval"]}\n')
 
+            bound = ({'upper': th_pruner['result']} if minimize
+                     else {'lower': th_pruner['result']})
             pruner = optuna.pruners.ThresholdPruner(
-                lower=th_pruner["result"], n_warmup_steps=th_pruner["games"],
-                interval_steps=th_pruner["interval"])
+                n_warmup_steps=th_pruner["games"],
+                interval_steps=th_pruner["interval"], **bound)
 
         return pruner, th_pruner
 
@@ -602,12 +615,7 @@ class Objective(object):
         """
         Generates a key based on param name and param value.
         """
-        parvalkey = ''
-        for k, v in param.items():
-            parvalkey += f'{k}={v},'
-        parvalkey = parvalkey[0:-1]
-
-        return parvalkey
+        return ','.join(f'{k}={v}' for k, v in param.items())
 
     def __call__(self, trial):
         logger.info('')
@@ -615,96 +623,64 @@ class Objective(object):
         logger.info(f'deterministic function: {not self.noisy_result}')
         start_time = time.perf_counter()
 
-        # Options for test engine.
-        test_options = ''
+        # Suggest values for the parameters to optimize.
         for k, v in self.input_param.items():
-            # If input is of float type.
-            try:
-                param_type = v['type']
-            except KeyError:
-                param_type = 'int'
-
-            if param_type == 'float':
+            if v.get('type') == 'float':
                 par_val = round(trial.suggest_float(k, v['min'], v['max'], step=v['step']), 5)
             # Otherwise use integer.
             else:
                 par_val = trial.suggest_int(k, v['min'], v['max'], step=v['step'])
-            test_options += f'option.{k}={par_val} '
-            self.test_param.update({k: par_val})
+            self.test_param[k] = par_val
 
         # Check if param values suggested by sampler was already suggested before and if so
         # just retrieve the objective value and send it to the sampler.
         test_param_key = self.gen_parval_key(self.test_param)
-        if test_param_key in self.trial_hist_check:
-            if not self.noisy_result:
+        was_pruned = test_param_key in self.pruned_hist
+        if was_pruned or test_param_key in self.trial_hist_check:
+            logger.warning(f'Duplicate suggestion from sampler, {self.test_param}')
+            if self.noisy_result:
+                logger.warning('Execute engine match as --noisy-result flag is enabled.')
+            elif was_pruned:
+                # Only a partial result exists for this param, from the match
+                # that was pruned. Prune again instead of returning that value,
+                # which would record a completed trial for games never played.
+                logger.warning('Prune this trial, the param was pruned before.')
+                elapse_time(time.perf_counter() - start_time)
+                raise optuna.TrialPruned()
+            else:
                 value = self.trial_hist_check[test_param_key]
-                logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
-                logging.warning(f'Just return previous value of {value}')
+                logger.warning(f'Just return previous value of {value}')
                 return value
-            else:
-                logging.warning(f'Duplicate suggestion from sampler, {self.test_param}')
-                logging.warning(f'Execute engine match as --noisy-result flag is enabled.')
 
-        # Update trial_hist_check for sampler duplicate suggestions.
-        # We update its objective value (0.0 at the moment) after we get the engine vs engine match result.
-        temp_result = 0.0 if not self.elo_objective else -800
-        self.trial_hist_check.update({test_param_key: temp_result})
-
-        # Add common param. It should not be included in the test param.
+        # Engine options as argv tokens. Common param goes to both engines and
+        # should not be included in the test param (overlap is rejected at
+        # startup). The base engine plays the init param.
+        test_options = option_tokens(self.test_param)
+        base_options = option_tokens(self.init_param)
         if self.common_param is not None:
-            for k, v in self.common_param.items():
-                test_options += f'option.{k}={v} '
-
-        test_options.rstrip()
-
-        # Options for base engine.
-        base_options = ''
-        if self.fix_base_param:
-            for k, v in self.init_param.items():
-                base_options += f'option.{k}={v} '
-        else:
-            # Even before the actual optimization begins we already have a
-            # best param and value because we added a trial from init param and init value.
-            # From the start the best param is the user specified init param and by
-            # default the init value is 0.5. After the study when best value could not exceed the
-            # best value threshold (default=0.5) then the best param could still be the init param.
-            if self.best_value > self.best_value_threshold:
-                for k, v in self.best_param.items():
-                    base_options += f'option.{k}={v} '
-            else:
-                for k, v in self.init_param.items():
-                    base_options += f'option.{k}={v} '
-
-        # Add common param. It should not be included in the test param.
-        if self.common_param is not None:
-            for k, v in self.common_param.items():
-                base_options += f'option.{k}={v} '
-
-        base_options.rstrip()
+            test_options += option_tokens(self.common_param)
+            base_options += option_tokens(self.common_param)
 
         # Log info to console.
         logger.info(f'suggested param for test engine: {self.test_param}')
-        if self.fix_base_param:
-            logger.info(f'param for base engine          : {self.init_param}')
-        else:
-            if self.best_value > self.best_value_threshold:
-                logger.info(f'param for base engine          : {self.best_param}')
-            else:
-                logger.info(f'param for base engine          : {self.init_param}')
+        logger.info(f'param for base engine          : {self.init_param}')
 
         if self.common_param is not None:
             logger.info(f'common param: {self.common_param}')
 
         logger.info(f'init param: {self.init_param}')
         logger.info(f'init objective value: {self.init_value}')
-        if not self.fix_base_param:
-            logger.info(f'best value threshold: {self.best_value_threshold}')
-        logger.info(f'study best param: {self.best_param}')
+
+        # Read the best trial from optuna in one go: it already tracks the best
+        # for the study's direction, and taking all three lines from the same
+        # trial keeps them consistent with each other.
+        best = self.study.best_trial
+        logger.info(f'study best param: {best.params}')
         if self.elo_objective:
-            logger.info(f'study best objective value: Elo {self.best_value}')
+            logger.info(f'study best objective value: Elo {best.value}')
         else:
-            logger.info(f'study best objective value: {self.best_value}')
-        logger.info(f'study best trial number: {self.study.best_trial.number}')
+            logger.info(f'study best objective value: {best.value}')
+        logger.info(f'study best trial number: {best.number}')
 
         # Run engine vs engine match.
 
@@ -714,7 +690,7 @@ class Objective(object):
         if (len(self.threshold_pruner)
                 and len(self.study.trials) > self.startup_trials):
             games_to_play = self.threshold_pruner['games']
-            result, played_games, final_result = 0.0, 0, []
+            result, played_games = 0.0, 0
 
             # Pre-sample this trial's openings so the pruner's batches (each a
             # separate match process) never reuse the same opening within the
@@ -743,32 +719,27 @@ class Objective(object):
                         os.remove(batch_opening_file)
 
                 wins += pwins; losses += plosses; draws += pdraws; games += pgames
+                played_games += games_to_play
 
-                # Elo for partial games.
-                pelo = Elo(pwins, plosses, pdraws); pelodiff = pelo.diff()
-
+                # This batch's own result, and the cumulative result over all
+                # games of the trial so far (every game weighs the same, no
+                # matter how the batches were sized).
                 if self.elo_objective:
-                    cur_result = round(pelodiff, 0)
+                    cur_result = round(Elo(pwins, plosses, pdraws).diff(), 0)
+                    result = round(Elo(wins, losses, draws).diff(), 0)
                 else:
                     cur_result = round(cur_result, 5)
-
-                played_games += games_to_play
-                final_result.append(cur_result)
-                result = Objective.result_mean(final_result)
+                    result = round((wins + draws / 2) / games, 5)
 
                 logger.info(f'result: {{intermediate: {self.value_name} {cur_result}, G/W/D/L: {pgames}/{pwins}/{pdraws}/{plosses}}}')
-                logger.info(f'result: {{average: {self.value_name} {result}, G/W/D/L: {games}/{wins}/{draws}/{losses}}}')
-
-                elo = Elo(wins, losses, draws)
-                elodiff = elo.diff()
-
-                if self.elo_objective:
-                    result = round(elodiff, 0)
+                logger.info(f'result: {{cumulative: {self.value_name} {result}, G/W/D/L: {games}/{wins}/{draws}/{losses}}}')
 
                 trial.report(result, played_games)
 
                 if trial.should_prune():
-                    self.trial_hist_check.update({test_param_key: result})
+                    # Remember that this param was pruned. Its partial result
+                    # must not be reused as if it were a completed match.
+                    self.pruned_hist.add(test_param_key)
                     elapse_time(time.perf_counter() - start_time)
                     raise optuna.TrialPruned()
 
@@ -779,8 +750,6 @@ class Objective(object):
                     self.games_per_trial - played_games,
                     self.threshold_pruner['games'] * self.threshold_pruner['interval']
                 )
-
-            result = Objective.result_mean(final_result)
         # Else if there is no trial pruner just proceed with normal game test at full games per trial.
         else:
             result, wins, losses, draws, games = self.engine_match(test_options, base_options, self.games_per_trial)
@@ -814,59 +783,12 @@ class Objective(object):
                     f' LOS: {los:0.1f}%, DrawRatio: {100 * dr:0.2f}%')
 
         # Output for match manager.
-        test_param = ''
-        for k, v in self.test_param.items():
-            test_param += f'option.{k}={v} '
-        logger.info(f'test param format for match manager: {test_param}')
+        logger.info(f'test param format for match manager: {options_str(self.test_param)}')
 
-        # If base engine always uses the initial param or default param.
-        if self.fix_base_param:
-            # Update the repeat data where the key was previously defined.
-            self.trial_hist_check.update({test_param_key: result})
-
-            # Backup best value and param.
-            if result > self.best_value:
-                self.best_value = result
-
-                for k, v in self.test_param.items():
-                    self.best_param.update({k: v})
-
-        # Else if best param used by base engine is dynamic, meaning the base
-        # engine will use the available best param.
-        else:
-            # Update best param and value. We modify the result sent to optimizer here because the
-            # optimizer will consider the max result in its algorithm. Everytime the best value threshold is
-            # exceeded by result we increment the best value.
-            # Ref.: https://github.com/optuna/optuna/issues/1728
-            if result > self.best_value_threshold:
-                self.good_result_cnt += 1
-                self.best_value = round(self.best_value + self.inc_factor * (result - self.best_value), 5)
-                result = self.best_value
-
-                for k, v in self.test_param.items():
-                    self.best_param.update({k: v})
-            else:
-                # If the objective value or result could not exceed the best value threshold,
-                # we still consider the current result as best value and save the param as best param if
-                # result exceeds the current best value.
-                isbest_result = False
-                if result > self.best_value:
-                    isbest_result = True
-                    for k, v in self.test_param.items():
-                        self.best_param.update({k: v})
-
-                # Adjust the result sent to the optimizer. Given a match
-                # result of 0.48 from trial 0, good_result_cnt of 0 and then
-                # later a match result of 0.48 at trial 50 with good_result_cnt
-                # of 4, the latter performs better and their results should be
-                # different in the eyes of the optimizer.
-                # Trial:  0, good_result_cnt: 0, actual_result: 0.48, result: 0.479
-                # Trial: 50, good_result_cnt: 4, actual_result: 0.48, result: 0.4798
-                result = round(result - 0.001/(self.good_result_cnt + 1), 5)
-
-                # Update our best value from the adjusted result.
-                if isbest_result:
-                    self.best_value = result
+        # Cache the result for duplicate suggestions from the sampler. A full
+        # match supersedes any earlier pruned partial for the same param.
+        self.trial_hist_check[test_param_key] = result
+        self.pruned_hist.discard(test_param_key)
 
         logger.info(f'result sent to optimizer: {result}')
         elapse_time(time.perf_counter() - start_time)
@@ -882,19 +804,23 @@ def save_plots(study, study_name, input_param, is_plot=False):
 
     # Use optuna's matplotlib backend so plots are saved as static PNG images.
     import warnings
-    import matplotlib
-    matplotlib.use('Agg')  # render to a file, no display/browser needed
-    import matplotlib.pyplot as plt
-    from matplotlib.contour import ContourSet
-    from optuna.visualization.matplotlib import (
-        plot_optimization_history, plot_slice, plot_contour,
-        plot_parallel_coordinate, plot_param_importances)
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # render to a file, no display/browser needed
+        import matplotlib.pyplot as plt
+        from matplotlib.contour import ContourSet
+        from optuna.visualization.matplotlib import (
+            plot_optimization_history, plot_slice, plot_contour,
+            plot_parallel_coordinate, plot_param_importances)
+    except ModuleNotFoundError as err:
+        logger.warning(f'Skipped plots, matplotlib is not installed: {err}')
+        return
 
     trials = len(study.trials)
     bg = '#F7D0CA'
     params = list(input_param.keys())
 
-    # Make sure there is a visuals folder in the current working folder.
+    os.makedirs('visuals', exist_ok=True)
     pre_name = f'./visuals/{study_name}_{trials}'
 
     n = len(params)
@@ -1021,7 +947,7 @@ def save_plots(study, study_name, input_param, is_plot=False):
     logger.info('Done saving plots.\n')
 
 
-def save_study_log(study, study_name, elo_objective):
+def save_study_log(study, study_name, elo_objective, direction='maximize'):
     if not is_panda_ok:
         return
 
@@ -1030,31 +956,19 @@ def save_study_log(study, study_name, elo_objective):
     df.to_csv(f'{study_name}.csv', index=False)
 
     # Show a frame where same param are grouped and value is averaged.
-    df = df[df['value'].notnull()]  # Remove row with nan value
-    h = list(df)
-    h.remove('state')
-    h.remove('number')
+    # Pruned trials carry a partial result over fewer games; averaging them
+    # with completed trials would bias the mean, so keep COMPLETE only.
+    df = df[(df['state'] == 'COMPLETE') & df['value'].notnull()]
+    param_cols = [c for c in df.columns if c not in ('number', 'value', 'state')]
 
-    hh = h.copy()
-    hh.remove('value')
-
-    # Get the mean for repeated param.
-    dfn = df.copy(deep=True)
-    dfn2 = dfn[h]
-    dfn2 = dfn2.groupby(hh)['value'].transform('mean')
-
-    dfm = df.copy()
-    dfm.rename(columns={'number': 'trial'}, inplace=True)
-    dfm['value_mean'] = dfn2
-
-    # Get the count of repeated param.
-    dfc = df.copy(deep=True)
-    dfc2 = dfc[h]
-    dfc2 = dfc2.groupby(hh)['value'].transform('count')
-
-    # Add columns mean and count into the original frame.
-    dfm['trial_cnt'] = dfc2
-    dff = dfm.sort_values(by=['value_mean', 'trial_cnt'], ascending=False).reset_index(drop=True)
+    dfm = df.rename(columns={'number': 'trial'})
+    dfm['value_mean'] = df.groupby(param_cols)['value'].transform('mean')
+    dfm['trial_cnt'] = df.groupby(param_cols)['value'].transform('count')
+    # Best params first: highest score when maximizing (stronger play),
+    # lowest when minimizing (deliberately weaker play).
+    best_first = direction != 'minimize'
+    dff = dfm.sort_values(by=['value_mean', 'trial_cnt'],
+                          ascending=[not best_first, False]).reset_index(drop=True)
 
     if elo_objective:
         dff['value_mean'] = dff['value_mean'].round(1)
@@ -1071,10 +985,7 @@ def save_study_log(study, study_name, elo_objective):
     logger.info(f'study best trial number: {study.best_trial.number}\n')
 
     # Output for match manager.
-    option_output = ''
-    for k, v in study.best_params.items():
-        option_output += f'option.{k}={v} '
-    logger.info(f'{option_output}\n')
+    logger.info(f'{options_str(study.best_params)}\n')
 
 
 def elapse_time(seconds):
@@ -1125,6 +1036,31 @@ def resolve_param(inline_value, file_path, required, name, config_value=None):
     return None
 
 
+def validate_input_param(input_param):
+    """
+    Check every param spec has default/min/max/step with sane values, so a
+    config typo fails here with a clear message instead of a KeyError later.
+    """
+    for name, spec in input_param.items():
+        if not isinstance(spec, dict):
+            raise Exception(
+                f'input param "{name}" must be a mapping with default, min, max and step.')
+        missing = [k for k in ('default', 'min', 'max', 'step') if k not in spec]
+        if missing:
+            raise Exception(f'input param "{name}" is missing: {", ".join(missing)}.')
+        if spec.get('type', 'int') not in ('int', 'float'):
+            raise Exception(
+                f'input param "{name}" has unsupported type "{spec["type"]}"; use int or float.')
+        if spec['step'] <= 0:
+            raise Exception(f'input param "{name}" step must be positive.')
+        if spec['min'] > spec['max']:
+            raise Exception(f'input param "{name}" min {spec["min"]} exceeds max {spec["max"]}.')
+        if not spec['min'] <= spec['default'] <= spec['max']:
+            raise Exception(
+                f'input param "{name}" default {spec["default"]} is outside '
+                f'[{spec["min"]}, {spec["max"]}].')
+
+
 def detect_opening_format(opening_file):
     """
     Derive the cutechess/fastchess opening 'format' token from the opening file
@@ -1162,9 +1098,10 @@ def options_to_defaults(cfg_options, parser):
     """
     Translate the 'options' section of a --config file into argparse defaults.
 
-    Returns (defaults, sampler_tokens, pruner_tokens). 'defaults' is a dict for
-    parser.set_defaults(); sampler/threshold_pruner/hyperband_pruner are returned separately
-    because they use a list-of-lists token structure rather than a plain value.
+    Returns (defaults, sampler_tokens, pruner_tokens, hyperband_tokens).
+    'defaults' is a dict for parser.set_defaults(); sampler/threshold_pruner/
+    hyperband_pruner are returned separately because they use a list-of-lists
+    token structure rather than a plain value.
     Keys are normalized ('-' -> '_') and validated against the known flags so
     typos are caught early.
     """
@@ -1418,10 +1355,17 @@ def main():
     args.opening_format = detect_opening_format(args.opening_file)
     logger.info(f'opening file: {args.opening_file}, format: {args.opening_format}')
 
-    # Check if engine file exists.
+    # Check if engine and opening files exist.
     eng_path = Path(args.engine)
     if not eng_path.is_file():
         raise Exception(f'The engine in {eng_path} is missing!')
+    if not Path(args.opening_file).is_file():
+        raise Exception(f'The opening file in {args.opening_file} is missing!')
+
+    # depth and nodes are both search limits; with both given, one would
+    # silently win, so make the choice explicit.
+    if args.depth is not None and args.nodes is not None:
+        raise Exception('Define only one of --depth and --nodes.')
 
     # Resolve and validate the match manager.
     # --match-manager defaults to None so we can tell "explicitly set" from "omitted".
@@ -1450,6 +1394,15 @@ def main():
         raise Exception(
             '--use-affinity is only supported with --match-manager fastchess.')
 
+    # duel.py reads line-based books only and has no node limit.
+    if args.match_manager == 'duel':
+        if args.opening_format == 'pgn':
+            raise Exception(
+                'The duel match manager only supports epd/fen opening files, not pgn.')
+        if args.nodes is not None:
+            raise Exception(
+                '--nodes is not supported by the duel match manager; use --depth.')
+
     # Check the user-supplied match-manager executable, if any, exists.
     if args.match_manager_file is not None and not Path(args.match_manager_file).is_file():
         raise Exception(
@@ -1463,7 +1416,9 @@ def main():
         init_value = 0.5
 
     save_plots_every_trial = args.save_plots_every_trial
-    fix_base_param = True
+    # A block of 0 trials would never advance the trial counter.
+    if save_plots_every_trial < 1:
+        raise Exception('--save-plots-every-trial must be 1 or higher.')
 
     # Common param can come from --common-param (inline) or --common-param-file.
     common_param = resolve_param(args.common_param, args.common_param_file,
@@ -1473,15 +1428,12 @@ def main():
     # Number of games should be even for a fair engine match.
     games_per_trial = args.games_per_trial
     games_per_trial += 1 if (args.games_per_trial % 2) != 0 else 0
-    rounds = games_per_trial//2
-
-    good_result_cnt = 0
 
     study_name = args.study_name
     storage_file = f'{study_name}.db'
 
     logger.info(f'{__script_name__} {__version__}')
-    logger.info(f'trials: {trials}, games_per_trial: {rounds * 2}')
+    logger.info(f'trials: {trials}, games_per_trial: {games_per_trial}')
     logger.info(f'sampler: {args.sampler}')
     logger.info(f'objective value type: {"Elo" if elo_objective else "score rate"}\n')
 
@@ -1490,19 +1442,30 @@ def main():
                                 required=True, name='input-param',
                                 config_value=cfg.get('input_param'))
     input_param = OrderedDict(sorted(input_param.items()))
+    validate_input_param(input_param)
+
+    # A param in both would reach the engine twice and the common (fixed)
+    # value would silently override the tuned one.
+    if common_param is not None:
+        overlap = sorted(set(input_param) & set(common_param))
+        if overlap:
+            raise Exception(
+                f'These params are in both input_param and common_param: '
+                f'{", ".join(overlap)}. Remove them from one of the two.')
 
     logger.info(f'input param: {input_param}\n')
     init_param = Objective.set_param(input_param)
 
-    # Adjust save_plots_every_trial if trials is lower than it so
-    # that max_cycle is 1 or more and studies can continue. The plot
-    # will be generated after the study.
+    # Adjust save_plots_every_trial if trials is lower than it so a block is
+    # at least 1 trial. The plot will be generated after each block.
     if trials < save_plots_every_trial:
         save_plots_every_trial = trials
 
-    max_cycle = trials // save_plots_every_trial
-    n_trials = save_plots_every_trial
-    cycle = 0
+    # Run in blocks of save_plots_every_trial so plots/logs are saved after
+    # each block. The last block runs whatever is left, so a --trials count
+    # that is not a multiple of save_plots_every_trial is honoured exactly
+    # instead of being truncated.
+    trials_done = 0
 
     # Define sampler to use, default is TPE. CLI --sampler wins; otherwise fall
     # back to the config options.sampler mapping (already tokenized).
@@ -1518,103 +1481,94 @@ def main():
     if threshold_arg is not None and hyperband_arg is not None:
         raise SystemExit('Define only one pruner: --threshold-pruner or --hyperband-pruner '
                          '(or config options.threshold_pruner / options.hyperband_pruner), not both.')
-    pruner, th_pruner = Objective.get_pruner(threshold_arg, hyperband_arg, games_per_trial, elo_objective)
+    # Hyperband compares intermediate values through the study direction, so it
+    # needs nothing from us. The threshold pruner has a fixed bound and does,
+    # hence the direction is passed to get_pruner().
+    pruner, th_pruner = Objective.get_pruner(threshold_arg, hyperband_arg,
+                                             games_per_trial, elo_objective,
+                                             args.direction)
+
+    # Create (or resume) the study once; the loop below only runs more trials
+    # on it. Recreating it per block would rescan all trials every time.
+    study = optuna.create_study(study_name=study_name,
+                                direction=args.direction,
+                                storage=f'sqlite:///{storage_file}',
+                                load_if_exists=True, sampler=sampler,
+                                pruner=pruner)
+
+    # A resumed study keeps the direction it was created with, and optuna
+    # ignores the one asked for here without saying so. Fail loudly instead:
+    # silently strengthening a study meant to be weakened wastes a whole run.
+    if study.direction.name.lower() != args.direction.lower():
+        raise SystemExit(
+            f'Study "{study_name}" already exists with direction '
+            f'{study.direction.name.lower()}, but --direction {args.direction} was given. '
+            f'Use --direction {study.direction.name.lower()} to continue it, '
+            f'or pick a new --study-name.')
+
+    # Report the best trial of a previous study session, if any.
+    is_study = False
+    try:
+        best = study.best_trial
+        is_study = True
+        logger.info(f'study best objective value: {best.value}')
+        logger.info(f'study best param: {best.params}')
+    except ValueError:
+        logger.warning('Warning, best value/param from a previous session is not found!')
+    except Exception:
+        logger.exception('Unexpected error while reading study best value/param.')
+        raise
+
+    # If there is no trial recorded yet we will initialize our study
+    # with default values from the engine.
+    if not is_study:
+        distri = {}
+        for k, v in input_param.items():
+            if v.get('type') == 'float':
+                distri[k] = FloatDistribution(v['min'], v['max'], log=False, step=v['step'])
+            else:
+                distri[k] = IntDistribution(v['min'], v['max'], log=False, step=v['step'])
+
+        init_trial = optuna.trial.create_trial(
+            params=copy.deepcopy(init_param),
+            distributions=distri,
+            value=init_value,
+        )
+        study.add_trial(init_trial)
+
+        logger.info(f"added trial: yes, params: {init_trial.params}, objective value: {init_trial.values[0]}")
+
+    # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
+    objective = Objective(
+        study=study, engine=args.engine, input_param=input_param,
+        init_param=init_param, init_value=init_value,
+        variant=args.variant, opening_file=args.opening_file,
+        opening_format=args.opening_format, pgnout=args.pgn_output,
+        nodes=args.nodes, base_time_sec=args.base_time_sec,
+        inc_time_sec=args.inc_time_sec, concurrency=args.concurrency,
+        proto=args.protocol, match_manager=args.match_manager,
+        match_manager_file=args.match_manager_file, depth=args.depth,
+        games_per_trial=games_per_trial, threshold_pruner=th_pruner,
+        common_param=common_param, resign_movecount=args.resign_movecount,
+        resign_score=args.resign_score, draw_movenumber=args.draw_movenumber,
+        draw_movecount=args.draw_movecount, draw_score=args.draw_score,
+        opening_posperfile=args.opening_posperfile,
+        n_startup_trials=n_startup_trials, noisy_result=args.noisy_result,
+        elo_objective=elo_objective, use_affinity=args.use_affinity)
 
     logger.info('Starting optimization ...')
 
-    while cycle < max_cycle:
-        cycle += 1
+    while trials_done < trials:
+        n_trials = min(save_plots_every_trial, trials - trials_done)
+        trials_done += n_trials
 
-        # Define study.
-        study = optuna.create_study(study_name=study_name,
-                                    direction=args.direction,
-                                    storage=f'sqlite:///{storage_file}',
-                                    load_if_exists=True, sampler=sampler,
-                                    pruner=pruner)
+        study.optimize(objective, n_trials=n_trials)
 
-        # Get the best value from previous study session.
-        best_param, best_value, is_study = {}, 0.0, False
-        try:
-            best_value = study.best_value
-            is_study = True
-        except ValueError:
-            logger.warning('Warning, best value from previous trial is not found!')
-        except Exception:
-            logger.exception('Unexpected error while reading study best value.')
-            raise
-        logger.info(f'study best objective value: {best_value}')
-
-        # Get the best param values from previous study session.
-        try:
-            best_param = copy.deepcopy(study.best_params)
-        except ValueError:
-            logger.warning('Warning, best param from previous trial is not found!.')
-        except Exception:
-            logger.exception('Unexpected error while reading study best params.')
-            raise
-        logger.info(f'study best param: {best_param}')
-
-        # Get the good result count before we resume the study.
-        if is_panda_ok and not fix_base_param and is_study:
-            df = study.trials_dataframe(attrs=('value', 'state'))
-            for index, row in df.iterrows():
-                if row['value'] > init_value and row['state'] == 'COMPLETE':
-                    good_result_cnt += 1
-
-        # If there is no trial recorded yet we will initialize our study
-        # with default values from the engine.
-        if not is_study:
-            distri = {}
-            init_trial_value = init_value
-
-            for k, v in input_param.items():
-                if 'type' in v and v['type'] == 'float':
-                    distri.update({k: FloatDistribution(v['min'], v['max'], log=False, step=v['step'])})
-                else:
-                    distri.update({k: IntDistribution(v['min'], v['max'], log=False, step=v['step'])})
-
-            init_trial = optuna.trial.create_trial(
-                params=copy.deepcopy(init_param),
-                distributions=copy.deepcopy(distri),
-                value=init_trial_value,
-            )
-            study.add_trial(init_trial)
-
-            logger.info(f"added trial: yes, params: {init_trial.params}, objective value: {init_trial.values[0]}")
-
-        # Get the best param and value from the study history including the added trial.
-        best_param = study.best_params
-        best_value = study.best_value
-
-        best_value_threshold = 0.5
-
-        # Begin param optimization.
-        # https://optuna.readthedocs.io/en/stable/reference/generated/optuna.study.Study.html#optuna.study.Study.optimize
-        study.optimize(Objective(study, args.engine, input_param, best_param,
-                                 best_value, best_value_threshold,
-                                 init_param, init_value,
-                                 args.variant, args.opening_file,
-                                 args.opening_format,
-                                 args.pgn_output, args.nodes,
-                                 args.base_time_sec, args.inc_time_sec,
-                                 rounds, args.concurrency,
-                                 args.protocol, fix_base_param,
-                                 args.match_manager, args.match_manager_file,
-                                 good_result_cnt,
-                                 args.depth, games_per_trial, th_pruner,
-                                 common_param, args.resign_movecount,
-                                 args.resign_score, args.draw_movenumber,
-                                 args.draw_movecount, args.draw_score,
-                                 args.opening_posperfile, n_startup_trials,
-                                 args.noisy_result, elo_objective,
-                                 use_affinity=args.use_affinity),
-                       n_trials=n_trials)
-
-        # Create and save plots after this study session is completed.
+        # Create and save plots after each block of trials.
         save_plots(study, study_name, input_param, args.plot)
 
         # Build pandas dataframe, print and save to csv file.
-        save_study_log(study, study_name, elo_objective)
+        save_study_log(study, study_name, elo_objective, args.direction)
 
 
 if __name__ == "__main__":
